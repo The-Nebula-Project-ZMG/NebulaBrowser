@@ -7,7 +7,10 @@ try {
   marked = require('marked');
   hljs = require('highlight.js');
   createDOMPurify = require('dompurify');
-  DOMPurify = createDOMPurify(window);
+  // Defer DOMPurify creation until DOM is ready to avoid early failures in some contexts
+  try {
+    DOMPurify = createDOMPurify(window);
+  } catch {}
   marked.setOptions({
     breaks: true,
     highlight(code, lang) {
@@ -24,14 +27,37 @@ try {
   // Expose to page context so page.html no longer needs CDN scripts
   try {
     if (typeof window !== 'undefined') {
+      // Note: with contextIsolation enabled, assigning to window does not expose to main world.
+      // Keep assignments for same-world consumers, but also expose explicitly via contextBridge below.
       window.marked = marked;
       window.DOMPurify = DOMPurify;
       window.hljs = hljs;
     }
   } catch {}
+  // Explicitly expose to main world so internal pages (browser://nebot) can use these libs
+  try {
+    if (marked) contextBridge.exposeInMainWorld('marked', marked);
+    if (hljs) contextBridge.exposeInMainWorld('hljs', hljs);
+    if (DOMPurify) contextBridge.exposeInMainWorld('DOMPurify', DOMPurify);
+  } catch {}
 } catch (e) {
   // If libs aren't available yet, we'll gracefully render as plain text.
 }
+
+// If DOMPurify wasn't ready, create and expose it after DOM is ready
+try {
+  window.addEventListener('DOMContentLoaded', () => {
+    try {
+      if (!DOMPurify && createDOMPurify) {
+        DOMPurify = createDOMPurify(window);
+      }
+      if (DOMPurify) {
+        try { contextBridge.exposeInMainWorld('DOMPurify', DOMPurify); } catch {}
+        try { window.DOMPurify = DOMPurify; } catch {}
+      }
+    } catch {}
+  });
+} catch {}
 
 const pluginId = 'ollama-chat';
 

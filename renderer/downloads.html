@@ -21,6 +21,10 @@
     .row { display: flex; gap: 12px; justify-content: space-between; align-items: center; }
     .empty { color: #888; font-style: italic; padding: 20px; text-align: center; }
     .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .scan { font-size: 12px; }
+  .scan.bad { color: #f87171; }
+  .scan.good { color: #34d399; }
+  .scan.pending { color: #fbbf24; }
   </style>
 </head>
 <body>
@@ -46,8 +50,28 @@
       return (n/Math.pow(1024,i)).toFixed( i===0 ? 0 : 1 ) + ' ' + u[i];
     }
 
+      function esc(s) {
+        return (s || '').replace(/[&<>"']/g, (c) => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;'
+        })[c]);
+      }
+
     function rowHtml(d){
       const pct = d.totalBytes > 0 ? Math.min(100, Math.round((d.receivedBytes||0) * 100 / d.totalBytes)) : 0;
+      const scan = d.scan || { status: 'unavailable' };
+      const isInfected = scan.status === 'infected';
+      const isScanning = scan.status === 'scanning';
+      const scanCls = scan.status === 'infected' ? 'scan bad' : (scan.status === 'clean' ? 'scan good' : (scan.status==='scanning'?'scan pending':'scan'));
+      const scanText = scan.status === 'infected' ? `Threat detected (${scan.engine||''})` :
+                       scan.status === 'clean' ? `Scanned clean (${scan.engine||''})` :
+                       scan.status === 'scanning' ? `Scanning... (${scan.engine||''})` :
+                       scan.status === 'pending' ? `Queued for scan (${scan.engine||''})` :
+                       scan.status === 'error' ? `Scan error${scan.details?': '+esc(scan.details):''}` :
+                       'Scan unavailable';
       return `
         <div class="download-item" id="dl-${d.id}">
           <div class="file" title="${d.filename}">${d.filename}</div>
@@ -56,13 +80,16 @@
               <button data-act="${d.paused?'resume':'pause'}" data-id="${d.id}">${d.paused?'Resume':'Pause'}</button>
               <button data-act="cancel" data-id="${d.id}">Cancel</button>
             ` : `
-              <button data-act="open-file" data-id="${d.id}" ${d.state!=='completed'?'disabled':''}>Open</button>
+              <button data-act="open-file" data-id="${d.id}" ${(d.state!=='completed'||isInfected)?'disabled':''}>Open</button>
               <button data-act="show-in-folder" data-id="${d.id}">Show in Folder</button>
+              ${isInfected ? `<button data-act="delete-file" data-id="${d.id}">Delete</button>` : ''}
+              ${d.state!=='in-progress' ? `<button data-act="rescan" data-id="${d.id}" ${isScanning?'disabled':''}>Rescan</button>` : ''}
             `}
           </div>
           <div class="meta">
             <span class="state">${d.state}</span>
             · ${fmtBytes(d.receivedBytes||0)} / ${fmtBytes(d.totalBytes||0)}
+            · <span class="${scanCls}">${scanText}</span>
           </div>
           <div class="progress"><div class="bar" style="width:${pct}%"></div></div>
         </div>
@@ -102,7 +129,9 @@
       // For simplicity now, refresh list
       refresh();
     });
-    api.onDone(()=> refresh());
+  api.onDone(()=> refresh());
+  api.onScanStarted(()=> refresh());
+  api.onScanResult(()=> refresh());
     api.onCleared(()=> refresh());
 
     refresh();

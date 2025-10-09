@@ -196,14 +196,24 @@
     if(!chat){ return; }
     chat.messages.forEach(m=>{
       const div = h('div',{class:'msg '+m.role});
-      div.innerHTML = '<div class="markdown">'+renderMarkdown(m.content)+'</div>';
-      
-      // Enhance links for security
+      const mdEl = h('div', { class: 'markdown' });
+      // If libs are ready, render now; otherwise, show plain text and mark for deferred upgrade
+      if (window.marked && window.DOMPurify) {
+        mdEl.innerHTML = renderMarkdown(m.content);
+      } else {
+        mdEl.textContent = m.content || '';
+        mdEl.dataset.raw = m.content || '';
+        deferredMarkdown.add(mdEl);
+        scheduleDeferredMarkdownCheck();
+      }
+      div.appendChild(mdEl);
+
+      // Enhance links for security (in case already rendered)
       div.querySelectorAll('a[href]').forEach(a => {
         a.setAttribute('target', '_blank');
         a.setAttribute('rel', 'noopener noreferrer');
       });
-      
+
       els.messages.appendChild(div);
     });
     els.messages.scrollTop = els.messages.scrollHeight;
@@ -308,6 +318,8 @@
     typeNext();
   }
 
+  // Keep a registry of handlers so we can remove previous listeners reliably
+  const streamHandlers = new Map();
   function subscribeStream(id){
     const channel = 'ollama-chat:stream:' + id;
     console.log('[Nebot Page] Subscribing to stream channel:', channel);
@@ -316,9 +328,12 @@
     typingQueue = [];
     isTyping = false;
     
-    // Remove any existing listeners for this channel
+    // Remove any existing listener registered earlier for this channel
     if (window.electronAPI && window.electronAPI.removeListener) {
-      window.electronAPI.removeListener(channel, handleStreamPayload);
+      const prev = streamHandlers.get(channel);
+      if (prev) {
+        try { window.electronAPI.removeListener(channel, prev); } catch {}
+      }
     }
     
     function handleStreamPayload(...args) {
@@ -398,6 +413,7 @@
     if (window.electronAPI && window.electronAPI.on) {
       console.log('[Nebot Page] Setting up stream listener via electronAPI');
       window.electronAPI.on(channel, handleStreamPayload);
+      streamHandlers.set(channel, handleStreamPayload);
     } else {
       console.warn('[Nebot Page] electronAPI.on not available for stream subscription');
     }
@@ -583,4 +599,24 @@
   initializeSettings().then(() => {
     refreshList().then(()=>{ if(state.chats[0]) openChat(state.chats[0].id); });
   });
+
+  // Listen for title updates from main (auto-generated titles)
+  try {
+    if (window.electronAPI && typeof window.electronAPI.on === 'function') {
+      window.electronAPI.on('ollama-chat:chat-updated', (payload) => {
+        const data = payload || {};
+        const { id, title } = data;
+        if (!id || !title) return;
+        // Update local state and rerender list
+        const item = state.chats.find(c => c.id === id);
+        if (item) {
+          item.title = title;
+          renderChatList();
+        } else {
+          // Fallback: refresh list from disk if we don't have it
+          refreshList();
+        }
+      });
+    }
+  } catch (e) { console.warn('[Nebot Page] failed to attach chat-updated listener', e); }
 })();

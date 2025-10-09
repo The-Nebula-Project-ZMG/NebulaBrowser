@@ -52,7 +52,9 @@ urlBox.addEventListener('keydown', (e) => {
 
 let tabs = [];
 let activeTabId = null;
-const allowedInternalPages = ['settings', 'home', 'downloads', 'nebot'];
+const allowedInternalPages = ['settings', 'home', 'downloads', 'nebot', 'insecure'];
+// Session-scoped allowlist of HTTP hosts the user explicitly chose to proceed with.
+const insecureBypassedHosts = new Set();
 let pluginPages = []; // { id, file, fileUrl, pluginId }
 let pluginPagesReady = false;
 const pendingInternalNavigations = [];
@@ -65,6 +67,16 @@ window.addEventListener('message', (e) => {
     if (data.type === 'open-internal-page' && typeof data.url === 'string') {
       console.log('[DEBUG] Message request to open internal page:', data.url);
       createTab(data.url);
+    } else if (data.type === 'navigate' && typeof data.url === 'string') {
+      // Fallback navigation from pages (like insecure.html) when electronAPI.sendToHost is unavailable
+      try {
+        if (data.opts && data.opts.insecureBypass && /^http:\/\//i.test(data.url)) {
+          const h = new URL(data.url).hostname;
+          insecureBypassedHosts.add(h);
+        }
+      } catch {}
+      urlBox.value = data.url;
+      navigate();
     }
   } catch (err) {
     console.warn('[DEBUG] open-internal-page handler error', err);
@@ -300,8 +312,15 @@ function createTab(inputUrl) {
     if (e.channel === 'navigate' && e.args[0]) {
       const targetUrl = e.args[0];
       const opts = e.args[1] || {};
+      // If user accepted insecure warning, record host to bypass for session
+      try {
+        if (opts.insecureBypass && /^http:\/\//i.test(targetUrl)) {
+          const h = new URL(targetUrl).hostname;
+          insecureBypassedHosts.add(h);
+        }
+      } catch {}
       if (opts.newTab) {
-        createTab(targetUrl);
+          createTab(targetUrl);
       } else {
         urlBox.value = targetUrl;
         navigate();
@@ -338,7 +357,10 @@ try { window.createTab = createTab; } catch {}
 function resolveInternalUrl(url) {
   console.log('[DEBUG] resolveInternalUrl called with:', url);
   if (url.startsWith('browser://')) {
-    const page = url.replace('browser://', '');
+    // Support query / hash on internal pages (e.g., browser://insecure?target=...)
+    const tail = url.replace('browser://', '');
+    const page = tail.split(/[?#]/)[0];
+    const suffix = tail.slice(page.length); // includes ? and/or # if present
     console.log('[DEBUG] Extracted page:', page);
     // Fast path: if user typed browser://nebot and plugin page exists, return immediately
     if (page === 'nebot') {
@@ -358,14 +380,14 @@ function resolveInternalUrl(url) {
       console.log('[DEBUG] Resolving browser://' + page, 'plug:', plug);
       if (plug && (plug.fileUrl || plug.file)) {
         // Prefer pre-built fileUrl for correctness across platforms
-  const resolved = plug.fileUrl ? plug.fileUrl : (plug.file.startsWith('file://') ? plug.file : 'file://' + plug.file.replace(/\\/g,'/'));
-  console.log('[DEBUG] Resolved plugin page', page, '->', resolved);
-  return resolved;
+        const resolved = plug.fileUrl ? plug.fileUrl : (plug.file.startsWith('file://') ? plug.file : 'file://' + plug.file.replace(/\\/g,'/'));
+        console.log('[DEBUG] Resolved plugin page', page, '->', resolved);
+        return resolved + suffix;
       }
   // Fallback: built-in renderer copy (e.g., renderer/nebot.html)
   console.log('[DEBUG] Using fallback for page:', page);
-  if (page === 'nebot') return 'nebot.html';
-      return `${page}.html`;
+      if (page === 'nebot') return 'nebot.html' + suffix;
+      return `${page}.html${suffix}`;
     }
     console.log('[DEBUG] Page not in allowedInternalPages, returning 404');
     return '404.html';
@@ -414,6 +436,35 @@ function performNavigation(input, originalInputForHistory) {
   }
 
   console.log('[DEBUG] performNavigation input:', input, 'resolved:', resolved, 'tab.isHome:', tab.isHome, 'isInternal:', isInternal);
+
+  // Intercept plain HTTP (not HTTPS) navigations (excluding localhost / 127.* / internal pages)
+  try {
+    if (!isInternal && /^http:\/\//i.test(resolved)) {
+      const u = new URL(resolved);
+      const host = u.hostname;
+      const isLoopback = /^(localhost|127\.0\.0\.1|::1)$/.test(host);
+      if (!isLoopback && !insecureBypassedHosts.has(host)) {
+        const encoded = encodeURIComponent(resolved);
+        // Directly load insecure.html (avoid custom scheme so OS doesn't try to resolve an external handler)
+        const interstitial = `insecure.html?target=${encoded}`;
+        // For a fresh home tab, convert directly to webview showing the interstitial
+        if (tab.isHome) {
+          convertHomeTabToWebview(tab.id, originalInputForHistory, interstitial);
+          return;
+        }
+        // Navigate existing webview to interstitial instead
+        const webviewExisting = document.getElementById(`tab-${activeTabId}`);
+        if (webviewExisting) webviewExisting.src = interstitial;
+        tab.history = tab.history.slice(0, tab.historyIndex + 1);
+        tab.history.push(originalInputForHistory);
+        tab.historyIndex++;
+        tab.url = originalInputForHistory;
+        scheduleRenderTabs();
+        scheduleUpdateNavButtons();
+        return;
+      }
+    }
+  } catch (e) { debug('[DEBUG] HTTP interception error', e); }
 
   if (tab.isHome && !isInternal) {
     convertHomeTabToWebview(tab.id, originalInputForHistory, resolved);
@@ -528,6 +579,17 @@ function convertHomeTabToWebview(tabId, inputUrl, resolvedUrl) {
     if (e.channel === 'theme-update') {
       const home = document.getElementById('home-webview');
       if (home) home.send('theme-update', ...e.args);
+    } else if (e.channel === 'navigate' && e.args[0]) {
+      const targetUrl = e.args[0];
+      const opts = e.args[1] || {};
+      try {
+        if (opts.insecureBypass && /^http:\/\//i.test(targetUrl)) {
+          const h = new URL(targetUrl).hostname;
+          insecureBypassedHosts.add(h);
+        }
+      } catch {}
+      urlBox.value = targetUrl;
+      navigate();
     }
   });
 

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Connection Not Secure</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --bg:#121212; --panel:#1e1e1e; --warn:#d97706; --danger:#dc2626; --text:#f5f5f5; --muted:#9ca3af; --accent:#6366f1;
+    color-scheme: dark;
+  }
+  body { margin:0; font-family: system-ui,-apple-system,Segoe UI,Roboto,Inter,Ubuntu,sans-serif; background:var(--bg); color:var(--text); display:flex; min-height:100vh; align-items:center; justify-content:center; padding:32px; }
+  .card { max-width:780px; width:100%; background:linear-gradient(145deg,#1c1c1c,#242424); border:1px solid #2c2c2c; border-radius:20px; padding:40px 46px 48px; box-shadow:0 8px 28px -6px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,0.04); position:relative; overflow:hidden; }
+  .card:before { content:""; position:absolute; inset:0; background:radial-gradient(circle at 18% 15%,rgba(255,255,255,.08),transparent 55%), radial-gradient(circle at 82% 78%,rgba(255,255,255,.05),transparent 60%); pointer-events:none; }
+  h1 { font-size: clamp(1.9rem, 2.6vw, 2.6rem); margin:0 0 12px; letter-spacing:-.5px; display:flex; align-items:center; gap:.6rem; }
+  h1 span.badge { font-size:12px; letter-spacing:1px; padding:4px 8px; border:1px solid var(--warn); color:var(--warn); border-radius:999px; text-transform:uppercase; background:rgba(217,119,6,0.1); }
+  p.lede { font-size:1.05rem; line-height:1.55; margin:0 0 22px; color:var(--muted); }
+  code { background:#252525; padding:3px 6px; border-radius:6px; font-size:.9rem; color:#e0e0e0; }
+  .url-box { font-family:monospace; font-size:.92rem; padding:10px 12px; background:#181818; border:1px solid #2a2a2a; border-radius:10px; word-break:break-all; margin:0 0 22px; display:flex; align-items:center; gap:.75rem; }
+  .url-box svg { flex:0 0 auto; width:22px; height:22px; stroke:var(--warn); }
+  ul { margin:0 0 26px 1.1rem; padding:0; line-height:1.5; color:var(--muted); }
+  ul li { margin-bottom:6px; }
+  .actions { display:flex; flex-wrap:wrap; gap:14px; }
+  button { cursor:pointer; font-size:.95rem; letter-spacing:.4px; font-weight:500; border-radius:12px; padding:14px 26px; border:1px solid transparent; background:linear-gradient(135deg,#303030,#252525); color:#fff; position:relative; overflow:hidden; transition:.25s; }
+  button.primary { background:linear-gradient(135deg,#6366f1,#5145cd); box-shadow:0 4px 18px -4px rgba(99,102,241,.5); }
+  button.danger { background:linear-gradient(135deg,#b91c1c,#7f1d1d); border-color:#dc2626; }
+  button.outline { background:transparent; border-color:#444; }
+  button:hover { filter:brightness(1.12); transform:translateY(-2px); }
+  button:active { transform:translateY(0); filter:brightness(.9); }
+  .mini { font-size:.75rem; text-transform:uppercase; letter-spacing:1px; opacity:.8; margin-top:24px; }
+  .fade-in { animation:fade .5s ease .05s both; }
+  @keyframes fade { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform:none; } }
+  .grid { display:grid; gap:40px; }
+  @media (max-width:760px){ .card{padding:34px 28px 40px;} h1{font-size:2rem;} }
+</style>
+</head>
+<body>
+  <div class="card fade-in">
+    <h1>
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      Connection Not Secure <span class="badge">http</span>
+    </h1>
+    <p class="lede">You’re about to visit a page using <strong>HTTP (unencrypted)</strong>. Information you send or view can potentially be intercepted or modified. If this is a site you trust and you understand the risks, you can continue anyway.</p>
+    <div class="url-box" id="targetBox" title="Target URL"></div>
+    <ul>
+      <li>No TLS encryption – data (including passwords or forms) travels in plain text.</li>
+      <li>Attackers on the same network (café Wi‑Fi, school, workplace) could tamper with or read content.</li>
+      <li>The site might support HTTPS. Try manually changing to <code>https://</code> first.</li>
+      <li>Proceed only if necessary and you have a reason to trust this destination.</li>
+    </ul>
+    <div class="actions">
+      <button id="backBtn" class="outline" aria-label="Go Back">Go Back</button>
+      <button id="tryHttps" class="primary" aria-label="Retry with HTTPS">Try HTTPS</button>
+      <button id="continueBtn" class="danger" aria-label="Continue (HTTP)">Continue Anyway</button>
+    </div>
+    <div class="mini">Nebula Secure Navigation Interstitial</div>
+  </div>
+<script>
+(function(){
+  const params = new URLSearchParams(location.search);
+  const target = params.get('target');
+  const box = document.getElementById('targetBox');
+  if (target) box.textContent = target;
+  function sendNavigate(url, opts){
+    if (window.electronAPI && window.electronAPI.sendToHost){
+      window.electronAPI.sendToHost('navigate', url, opts||{});
+    } else if (window.parent) {
+      window.parent.postMessage({ type:'navigate', url, opts }, '*');
+    }
+  }
+  document.getElementById('backBtn').onclick = () => history.length > 1 ? history.back() : sendNavigate('browser://home');
+  document.getElementById('tryHttps').onclick = () => {
+    if (!target) return; try {
+      const u = new URL(target.replace(/^http:/,'https:'));
+      sendNavigate(u.href);
+    } catch { sendNavigate(target.replace(/^http:/,'https:')); }
+  };
+  document.getElementById('continueBtn').onclick = () => {
+    if (!target) return; sendNavigate(target, { insecureBypass:true });
+  };
+})();
+</script>
+</body>
+</html>

@@ -3,6 +3,7 @@ const { pathToFileURL } = require('url');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { spawn } = require('child_process');
 const PerformanceMonitor = require('./performance-monitor');
 const GPUFallback = require('./gpu-fallback');
 const GPUConfig = require('./gpu-config');
@@ -909,7 +910,7 @@ ipcMain.handle('save-image-from-url', async (event, { url }) => {
 // =========================
 
 // In-memory download registry
-const downloads = new Map(); // id -> { id, url, filename, savePath, totalBytes, receivedBytes, state, startedAt, mime, canResume, paused }
+const downloads = new Map(); // id -> { id, url, filename, savePath, totalBytes, receivedBytes, state, startedAt, mime, canResume, paused, scan? }
 
 function broadcastToAll(channel, payload) {
   try {
@@ -951,7 +952,8 @@ function registerDownloadHandling(ses) {
         startedAt: Date.now(),
         mime,
         canResume: false,
-        paused: false
+        paused: false,
+        scan: { status: process.platform === 'win32' ? 'pending' : 'unavailable', engine: process.platform === 'win32' ? 'Windows Defender' : 'none' }
       };
       downloads.set(id, { ...info, item });
   const payload = { ...info };
@@ -975,7 +977,7 @@ function registerDownloadHandling(ses) {
         });
       });
 
-      item.once('done', (e, state) => {
+      item.once('done', async (e, state) => {
         const d = downloads.get(id) || {};
         const finalState = state === 'completed' ? 'completed' : (state === 'cancelled' ? 'cancelled' : 'interrupted');
         const final = {
@@ -988,11 +990,34 @@ function registerDownloadHandling(ses) {
           state: finalState,
           startedAt: d.startedAt || Date.now(),
           endedAt: Date.now(),
-          mime
+          mime,
+          scan: d.scan || { status: process.platform === 'win32' ? 'pending' : 'unavailable', engine: process.platform === 'win32' ? 'Windows Defender' : 'none' }
         };
         // Store minimal object; drop live item ref
         downloads.set(id, final);
         broadcastToAll('downloads-done', final);
+
+        // Kick off a malware scan on Windows if the download completed and path exists
+        if (finalState === 'completed' && final.savePath && process.platform === 'win32') {
+          try {
+            // Update to scanning state and broadcast
+            const cur = downloads.get(id) || final;
+            cur.scan = { ...(cur.scan || {}), status: 'scanning', engine: 'Windows Defender' };
+            downloads.set(id, cur);
+            broadcastToAll('downloads-scan-started', { id, savePath: final.savePath });
+
+            const result = await scanFileForMalware(final.savePath);
+            const updated = downloads.get(id) || cur;
+            updated.scan = result;
+            downloads.set(id, updated);
+            broadcastToAll('downloads-scan-result', { id, scan: result });
+          } catch (scanErr) {
+            const updated = downloads.get(id) || final;
+            updated.scan = { status: 'error', engine: 'Windows Defender', details: String(scanErr && scanErr.message || scanErr) };
+            downloads.set(id, updated);
+            broadcastToAll('downloads-scan-result', { id, scan: updated.scan });
+          }
+        }
       });
     } catch (err) {
       console.error('will-download handler error:', err);
@@ -1039,7 +1064,8 @@ ipcMain.handle('downloads-get-all', () => {
         totalBytes: item.getTotalBytes?.() ?? rest.totalBytes ?? 0,
         state: rest.state || 'in-progress',
         paused: item.isPaused?.() || false,
-        canResume: item.canResume?.() || false
+        canResume: item.canResume?.() || false,
+        scan: rest.scan || { status: process.platform === 'win32' ? 'pending' : 'unavailable', engine: process.platform === 'win32' ? 'Windows Defender' : 'none' }
       };
     }
     return rest;
@@ -1062,6 +1088,46 @@ ipcMain.handle('downloads-action', async (event, { id, action }) => {
       case 'cancel':
         if (item && d.state === 'in-progress') item.cancel?.();
         return true;
+      case 'delete-file': {
+        if (d.savePath) {
+          try {
+            await fs.promises.unlink(d.savePath);
+            // Mark entry as deleted (custom state) and clear savePath
+            const updated = { ...d, state: d.state === 'completed' ? 'deleted' : d.state, savePath: null };
+            downloads.set(id, updated);
+            broadcastToAll('downloads-updated', { id, state: updated.state, savePath: null });
+            return true;
+          } catch (e) {
+            console.error('Failed to delete file:', e);
+            return false;
+          }
+        }
+        return false;
+      }
+      case 'rescan': {
+        if (d.savePath && process.platform === 'win32') {
+          try {
+            const cur = downloads.get(id) || d;
+            cur.scan = { status: 'scanning', engine: 'Windows Defender' };
+            downloads.set(id, cur);
+            broadcastToAll('downloads-scan-started', { id, savePath: d.savePath });
+            const result = await scanFileForMalware(d.savePath);
+            const updated = downloads.get(id) || cur;
+            updated.scan = result;
+            downloads.set(id, updated);
+            broadcastToAll('downloads-scan-result', { id, scan: result });
+            return true;
+          } catch (e) {
+            console.error('Rescan failed:', e);
+            const updated = downloads.get(id) || d;
+            updated.scan = { status: 'error', engine: 'Windows Defender', details: String(e && e.message || e) };
+            downloads.set(id, updated);
+            broadcastToAll('downloads-scan-result', { id, scan: updated.scan });
+            return false;
+          }
+        }
+        return false;
+      }
       case 'open-file':
         if (d.savePath) {
           await shell.openPath(d.savePath);
@@ -1086,8 +1152,79 @@ ipcMain.handle('downloads-action', async (event, { id, action }) => {
 // IPC: clear completed entries from the registry (keeps in-progress)
 ipcMain.handle('downloads-clear-completed', () => {
   for (const [id, d] of downloads.entries()) {
-    if (d.state === 'completed' || d.state === 'cancelled') downloads.delete(id);
+    if (d.state === 'completed' || d.state === 'cancelled' || d.state === 'deleted') downloads.delete(id);
   }
   broadcastToAll('downloads-cleared');
   return true;
 });
+
+// ---------------------------
+// Malware scan helpers (Windows Defender)
+// ---------------------------
+async function findDefenderMpCmdRun() {
+  if (process.platform !== 'win32') return null;
+  const candidates = [];
+  const programData = process.env['ProgramData'];
+  if (programData) {
+    const platformDir = path.join(programData, 'Microsoft', 'Windows Defender', 'Platform');
+    try {
+      const entries = await fs.promises.readdir(platformDir, { withFileTypes: true });
+      const versions = entries.filter(e => e.isDirectory()).map(e => e.name);
+      // Sort versions descending (simple lex sort approximates ok as versions are zero-padded; fallback to reverse chronological by stats)
+      versions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
+      for (const v of versions) {
+        candidates.push(path.join(platformDir, v, 'MpCmdRun.exe'));
+      }
+    } catch {}
+  }
+  const programFiles = process.env['ProgramFiles'] || 'C://Program Files';
+  candidates.push(path.join(programFiles, 'Windows Defender', 'MpCmdRun.exe'));
+  candidates.push(path.join(programFiles, 'Microsoft Defender', 'MpCmdRun.exe'));
+  for (const c of candidates) {
+    try {
+      await fs.promises.access(c, fs.constants.X_OK | fs.constants.R_OK);
+      return c;
+    } catch {}
+  }
+  return null;
+}
+
+async function scanFileForMalware(filePath) {
+  if (process.platform !== 'win32') {
+    return { status: 'unavailable', engine: 'none', details: 'Malware scanning is only available on Windows with Microsoft Defender.' };
+  }
+  try {
+    // Ensure file exists
+    await fs.promises.access(filePath, fs.constants.R_OK);
+  } catch {
+    return { status: 'error', engine: 'Windows Defender', details: 'File not found for scanning.' };
+  }
+  const exe = await findDefenderMpCmdRun();
+  if (!exe) {
+    return { status: 'unavailable', engine: 'Windows Defender', details: 'Microsoft Defender command-line scanner not found.' };
+  }
+
+  return await new Promise((resolve) => {
+    const args = ['-Scan', '-ScanType', '3', '-File', filePath];
+    let stdout = '';
+    let stderr = '';
+    const child = spawn(exe, args, { windowsHide: true });
+    child.stdout.on('data', (d) => { stdout += d.toString(); });
+    child.stderr.on('data', (d) => { stderr += d.toString(); });
+    child.on('error', (err) => {
+      resolve({ status: 'error', engine: 'Windows Defender', details: 'Failed to run scanner: ' + String(err && err.message || err) });
+    });
+    child.on('close', (code) => {
+      const out = (stdout + '\n' + stderr).toLowerCase();
+      // Heuristics: exit code 2 indicates threats found; also parse output
+      const infected = code === 2 || /threat|infected|malware|found\s*:\s*[1-9]/i.test(stdout) || /threat|infected|malware/.test(stderr);
+      if (infected) {
+        resolve({ status: 'infected', engine: 'Windows Defender', details: stdout || stderr, exitCode: code });
+      } else if (code === 0 || /no threats/.test(out) || /found\s*:\s*0/.test(out)) {
+        resolve({ status: 'clean', engine: 'Windows Defender', details: stdout || 'No threats found.', exitCode: code });
+      } else {
+        resolve({ status: 'error', engine: 'Windows Defender', details: (stdout || stderr || 'Unknown scan result') + ` (code ${code})`, exitCode: code });
+      }
+    });
+  });
+}

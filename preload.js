@@ -129,7 +129,9 @@ contextBridge.exposeInMainWorld('downloadsAPI', {
   onStarted: (handler) => ipcRenderer.on('downloads-started', (_e, payload) => handler(payload)),
   onUpdated: (handler) => ipcRenderer.on('downloads-updated', (_e, payload) => handler(payload)),
   onDone: (handler) => ipcRenderer.on('downloads-done', (_e, payload) => handler(payload)),
-  onCleared: (handler) => ipcRenderer.on('downloads-cleared', handler)
+  onCleared: (handler) => ipcRenderer.on('downloads-cleared', handler),
+  onScanStarted: (handler) => ipcRenderer.on('downloads-scan-started', (_e, payload) => handler(payload)),
+  onScanResult: (handler) => ipcRenderer.on('downloads-scan-result', (_e, payload) => handler(payload))
 });
 
 // ----------------------------------------
