@@ -139,13 +139,19 @@ function createWindow(startUrl) {
   const win = new BrowserWindow(windowOptions);
   perfMarks.browserWindow_instantiated = performance.now();
 
-  // Allow window.open() popups (e.g. OAuth / SSO / school portals) so that
-  // POST form submissions and opener relationships are preserved.
-  // We still restrict to http/https for safety; everything else is denied.
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return { action: 'allow' };
+  // Intercept window.open() requests and route them into the existing window as a new tab
+  // instead of spawning separate BrowserWindows. We still allow a small OAuth allowlist
+  // (accounts.google.com, login.microsoftonline.com, oauth, sso) to open real popups if
+  // the flow depends on window.opener relationships. Everything else becomes a new tab.
+  win.webContents.setWindowOpenHandler((details) => {
+    const { url } = details;
+    if (!/^https?:\/\//i.test(url)) return { action: 'deny' };
+    // OAuth / SSO allowlist heuristic
+    if (/accounts\.google\.com|microsoftonline\.com|oauth|login|signin|sso/i.test(url)) {
+      return { action: 'allow' }; // preserve popup semantics for complex auth flows
     }
+    // Forward to renderer to open as tab
+    try { win.webContents.send('open-url-new-tab', url); } catch {}
     return { action: 'deny' };
   });
 
@@ -161,11 +167,18 @@ function createWindow(startUrl) {
 
   // ensure all embedded <webview> tags behave predictably without heavy injections
   win.webContents.on('did-attach-webview', (event, webContents) => {
-    // Allow popups inside <webview> as well (required for some login flows)
-    webContents.setWindowOpenHandler(({ url }) => {
-      if (url.startsWith('http://') || url.startsWith('https://')) {
-        return { action: 'allow' };
+    // Route <webview> window.open() calls to tabs unless OAuth allowlist matched
+    webContents.setWindowOpenHandler((details) => {
+      const { url } = details;
+      if (!/^https?:\/\//i.test(url)) return { action: 'deny' };
+      if (/accounts\.google\.com|microsoftonline\.com|oauth|login|signin|sso/i.test(url)) {
+        return { action: 'allow' }; // keep popup for auth
       }
+      // Send to the owning window (embedder) to open a new tab
+      try {
+        const host = webContents.hostWebContents || webContents;
+        host.send('open-url-new-tab', url);
+      } catch {}
       return { action: 'deny' };
     });
   });

@@ -182,9 +182,17 @@ loadBookmarks();
 // Remove iframe-based navigation listener (using webview IPC now)
 
 // Listen for site history updates from main process
-ipcRenderer.on('record-site-history', (event, url) => {
+// NOTE: electronAPI.on wrapper strips the original event object and only forwards args.
+// Handlers therefore must NOT expect the event parameter.
+ipcRenderer.on('record-site-history', (url) => {
   debug('[DEBUG] Received site history update:', url);
-  addToSiteHistory(url);
+  if (typeof url === 'string' && url) addToSiteHistory(url);
+});
+
+// Main process requests opening a URL in a new tab (window.open interception)
+ipcRenderer.on('open-url-new-tab', (url) => {
+  console.log('[DEBUG] IPC open-url-new-tab received:', url);
+  if (typeof url === 'string' && url) createTab(url);
 });
 
 // Auto-open on download start is disabled by design now.
@@ -290,19 +298,22 @@ function createTab(inputUrl) {
   webview.addEventListener('did-finish-load', () => {
     scheduleUpdateNavButtons();
   });
+  // Catch failed loads for diagnostics (e.g., http -> https transitions failing)
+  webview.addEventListener('did-fail-load', (e) => {
+    console.warn('[DEBUG] did-fail-load (createTab) id:', id, 'code:', e.errorCode, 'desc:', e.errorDescription, 'validatedURL:', e.validatedURL, 'isMainFrame:', e.isMainFrame);
+  });
 
   // catch any target="_blank" or window.open() calls and open them as new tabs
   webview.addEventListener('new-window', e => {
-    // Allow auth / SSO popup windows (don't preventDefault) when target is http(s)
-    // so form POST + redirect chains stay intact. For simple links attempting to
-    // open a new tab, we create an in-app tab instead. Heuristic: if disposition
-    // is 'foreground-tab' or 'background-tab', treat as tab; otherwise allow popup.
-    if (e.url && (e.url.startsWith('http://') || e.url.startsWith('https://'))) {
-      if (e.disposition && e.disposition.includes('tab')) {
-        e.preventDefault();
-        createTab(e.url);
-      } // else let Electron create a real popup window
+    // Always open external http(s) targets in a new in-app tab instead of spawning
+    // a separate Electron BrowserWindow. (User request)
+    // If you need to allow real popup windows for specific OAuth flows later,
+    // introduce an allowlist check here before preventDefault().
+    if (e.url && /^https?:\/\//i.test(e.url)) {
+      e.preventDefault();
+      createTab(e.url);
     } else {
+      // Block other scheme popups for safety (could extend with custom handling)
       e.preventDefault();
     }
   });
@@ -563,12 +574,10 @@ function convertHomeTabToWebview(tabId, inputUrl, resolvedUrl) {
   });
 
   webview.addEventListener('new-window', e => {
-    if (e.url && (e.url.startsWith('http://') || e.url.startsWith('https://'))) {
-      if (e.disposition && e.disposition.includes('tab')) {
-        e.preventDefault();
-        createTab(e.url);
-      }
-      // otherwise allow popup for auth
+    // Unified behavior: always open http(s) targets in a new tab (no extra window)
+    if (e.url && /^https?:\/\//i.test(e.url)) {
+      e.preventDefault();
+      createTab(e.url);
     } else {
       e.preventDefault();
     }
@@ -926,12 +935,12 @@ function renderTabs() {
 }
 
 // 1) handle URL sent by main for a detached window
-ipcRenderer.on('open-url', (event, url) => {
+ipcRenderer.on('open-url', (url) => {
   tabs = [];
   activeTabId = null;
   webviewsEl.innerHTML = '';
   tabBarEl.innerHTML = '';
-  createTab(url);
+  if (typeof url === 'string' && url) createTab(url); else createTab();
 });
 
 function goBack() {
