@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "electron": "^37.3.1",
-    "electron-builder": "^23.0.0",
+    "electron-builder": "^23.6.0",
     "electron-nightly": "^39.0.0-nightly.20250811"
   },
   "build": {
@@ -29,7 +29,8 @@
       "icon": "assets/images/Logos/Nebula-Favicon.icns"
     },
     "win": {
-      "icon": "assets/images/Logos/Nebula-Favicon.ico"
+      "icon": "assets/images/Logos/Nebula-Favicon.ico",
+      "target": ["nsis", "portable"]
     },
     "linux": {
       "icon": "assets/images/Logos/Nebula-Favicon.png"
