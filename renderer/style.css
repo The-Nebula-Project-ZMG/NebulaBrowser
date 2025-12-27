@@ -410,13 +410,12 @@ body:has(#home-container.active) #downloads-btn {
   height: 100%;
   border: none;
   display: none;
-  flex: 1;
   position: relative;
   z-index: 0;
 }
 /* Show home webview when container is active */
 #home-container.active > #home-webview {
-  display: flex;
+  display: block;
 }
 
 /* TABS */
