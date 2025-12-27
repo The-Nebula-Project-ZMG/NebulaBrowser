@@ -31,6 +31,25 @@ function addToSiteHistory(url) {
   }
 }
 
+// Apply theme colors to the main UI (URL bar and tabs)
+function applyThemeToMainUI(theme) {
+  if (!theme || !theme.colors) return;
+  
+  const root = document.documentElement;
+  
+  // Apply URL bar and tab colors
+  if (theme.colors.urlBarBg) root.style.setProperty('--url-bar-bg', theme.colors.urlBarBg);
+  if (theme.colors.urlBarText) root.style.setProperty('--url-bar-text', theme.colors.urlBarText);
+  if (theme.colors.urlBarBorder) root.style.setProperty('--url-bar-border', theme.colors.urlBarBorder);
+  if (theme.colors.tabBg) root.style.setProperty('--tab-bg', theme.colors.tabBg);
+  if (theme.colors.tabText) root.style.setProperty('--tab-text', theme.colors.tabText);
+  if (theme.colors.tabActive) root.style.setProperty('--tab-active', theme.colors.tabActive);
+  if (theme.colors.tabActiveText) root.style.setProperty('--tab-active-text', theme.colors.tabActiveText);
+  if (theme.colors.tabBorder) root.style.setProperty('--tab-border', theme.colors.tabBorder);
+  
+  console.log('[THEME] Applied theme colors to main UI');
+}
+
 // 1) cache hot DOM references
 const urlBox       = document.getElementById('url');
 const tabBarEl     = document.getElementById('tab-bar');
@@ -337,8 +356,11 @@ function createTab(inputUrl) {
         navigate();
       }
     } else if (e.channel === 'theme-update') {
+      const theme = e.args[0];
+      // Apply theme to main UI
+      applyThemeToMainUI(theme);
       const home = document.getElementById('home-webview');
-      if (home) home.send('theme-update', ...e.args);
+      if (home) home.send('theme-update', theme);
     }
   });
 
@@ -1066,6 +1088,17 @@ if (homeContainerEl) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  // Initialize theme from localStorage
+  const savedTheme = localStorage.getItem('currentTheme');
+  if (savedTheme) {
+    try {
+      const theme = JSON.parse(savedTheme);
+      applyThemeToMainUI(theme);
+    } catch (err) {
+      console.error('Error applying saved theme:', err);
+    }
+  }
+  
   // Initial boot
   createTab();
   // Handle IPC messages from the static home webview (bookmarks navigation)
@@ -1096,9 +1129,12 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     // Theme update from settings webview
     if (e.channel === 'theme-update' && e.args[0]) {
+      const theme = e.args[0];
+      // Apply theme colors to the main renderer
+      applyThemeToMainUI(theme);
       const homeWebview = document.getElementById('home-webview');
       if (homeWebview) {
-        homeWebview.send('theme-update', e.args[0]);
+        homeWebview.send('theme-update', theme);
       }
     }
   });

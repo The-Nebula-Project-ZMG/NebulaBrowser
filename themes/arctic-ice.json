@@ -6,7 +6,15 @@
     "darkPurple": "#d1e7ff",
     "primary": "#4169e1",
     "accent": "#87ceeb",
-    "text": "#2f4f4f"
+    "text": "#2f4f4f",
+    "urlBarBg": "#e6f3ff",
+    "urlBarText": "#2f4f4f",
+    "urlBarBorder": "#4169e1",
+    "tabBg": "#e6f3ff",
+    "tabText": "#4169e1",
+    "tabActive": "#d1e7ff",
+    "tabActiveText": "#2f4f4f",
+    "tabBorder": "#f0f8ff"
   },
   "layout": "centered",
   "showLogo": true,

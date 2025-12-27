@@ -13,7 +13,15 @@ class BrowserCustomizer {
         darkPurple: '#1B1035',
         primary: '#7B2EFF',
         accent: '#00C6FF',
-        text: '#E0E0E0'
+        text: '#E0E0E0',
+        urlBarBg: '#1C2030',
+        urlBarText: '#E0E0E0',
+        urlBarBorder: '#3E4652',
+        tabBg: '#161925',
+        tabText: '#A4A7B3',
+        tabActive: '#1C2030',
+        tabActiveText: '#E0E0E0',
+        tabBorder: '#2B3040'
       },
       layout: 'centered',
       showLogo: true,
@@ -31,7 +39,15 @@ class BrowserCustomizer {
           darkPurple: '#2c5282',
           primary: '#3182ce',
           accent: '#00d9ff',
-          text: '#e2e8f0'
+          text: '#e2e8f0',
+          urlBarBg: '#2d5282',
+          urlBarText: '#e2e8f0',
+          urlBarBorder: '#1e3a5f',
+          tabBg: '#2a4365',
+          tabText: '#cbd5e0',
+          tabActive: '#2d5282',
+          tabActiveText: '#e2e8f0',
+          tabBorder: '#1a365d'
         },
         layout: 'centered',
         showLogo: true,
@@ -46,7 +62,15 @@ class BrowserCustomizer {
           darkPurple: '#4a5568',
           primary: '#68d391',
           accent: '#9ae6b4',
-          text: '#f7fafc'
+          text: '#f7fafc',
+          urlBarBg: '#2d3748',
+          urlBarText: '#f7fafc',
+          urlBarBorder: '#4a5568',
+          tabBg: '#2d3748',
+          tabText: '#cbd5e0',
+          tabActive: '#4a5568',
+          tabActiveText: '#f7fafc',
+          tabBorder: '#1a202c'
         },
         layout: 'centered',
         showLogo: true,
@@ -61,7 +85,15 @@ class BrowserCustomizer {
           darkPurple: '#c05621',
           primary: '#ed8936',
           accent: '#fbb040',
-          text: '#fffaf0'
+          text: '#fffaf0',
+          urlBarBg: '#975a16',
+          urlBarText: '#fffaf0',
+          urlBarBorder: '#c05621',
+          tabBg: '#975a16',
+          tabText: '#fde4b6',
+          tabActive: '#c05621',
+          tabActiveText: '#fffaf0',
+          tabBorder: '#744210'
         },
         layout: 'centered',
         showLogo: true,
@@ -76,7 +108,15 @@ class BrowserCustomizer {
           darkPurple: '#2a0a3a',
           primary: '#ff0080',
           accent: '#00ffff',
-          text: '#ffffff'
+          text: '#ffffff',
+          urlBarBg: '#1a0520',
+          urlBarText: '#ffffff',
+          urlBarBorder: '#ff0080',
+          tabBg: '#1a0520',
+          tabText: '#00ffff',
+          tabActive: '#2a0a3a',
+          tabActiveText: '#ff0080',
+          tabBorder: '#ff0080'
         },
         layout: 'centered',
         showLogo: true,
@@ -91,7 +131,15 @@ class BrowserCustomizer {
           darkPurple: '#3d3046',
           primary: '#d4af37',
           accent: '#ffd700',
-          text: '#f5f5dc'
+          text: '#f5f5dc',
+          urlBarBg: '#3d3046',
+          urlBarText: '#f5f5dc',
+          urlBarBorder: '#d4af37',
+          tabBg: '#2d2433',
+          tabText: '#d4af37',
+          tabActive: '#3d3046',
+          tabActiveText: '#ffd700',
+          tabBorder: '#1c1820'
         },
         layout: 'centered',
         showLogo: true,
@@ -106,7 +154,15 @@ class BrowserCustomizer {
           darkPurple: '#d1e7ff',
           primary: '#4169e1',
           accent: '#87ceeb',
-          text: '#2f4f4f'
+          text: '#2f4f4f',
+          urlBarBg: '#e6f3ff',
+          urlBarText: '#2f4f4f',
+          urlBarBorder: '#4169e1',
+          tabBg: '#e6f3ff',
+          tabText: '#4169e1',
+          tabActive: '#d1e7ff',
+          tabActiveText: '#2f4f4f',
+          tabBorder: '#f0f8ff'
         },
         layout: 'centered',
         showLogo: true,
@@ -121,7 +177,15 @@ class BrowserCustomizer {
           darkPurple: '#ffd4db',
           primary: '#ff69b4',
           accent: '#ffb6c1',
-          text: '#8b4513'
+          text: '#8b4513',
+          urlBarBg: '#ffe4e8',
+          urlBarText: '#8b4513',
+          urlBarBorder: '#ff69b4',
+          tabBg: '#ffe4e8',
+          tabText: '#ff69b4',
+          tabActive: '#ffd4db',
+          tabActiveText: '#8b4513',
+          tabBorder: '#fff5f8'
         },
         layout: 'centered',
         showLogo: true,
@@ -136,7 +200,15 @@ class BrowserCustomizer {
           darkPurple: '#2d1b69',
           primary: '#8a2be2',
           accent: '#da70d6',
-          text: '#e6e6fa'
+          text: '#e6e6fa',
+          urlBarBg: '#1a0b3d',
+          urlBarText: '#e6e6fa',
+          urlBarBorder: '#8a2be2',
+          tabBg: '#1a0b3d',
+          tabText: '#da70d6',
+          tabActive: '#2d1b69',
+          tabActiveText: '#e6e6fa',
+          tabBorder: '#0f0524'
         },
         layout: 'centered',
         showLogo: true,
@@ -151,7 +223,15 @@ class BrowserCustomizer {
           darkPurple: '#2d5a44',
           primary: '#50c878',
           accent: '#98fb98',
-          text: '#f0fff0'
+          text: '#f0fff0',
+          urlBarBg: '#1a3a2e',
+          urlBarText: '#f0fff0',
+          urlBarBorder: '#50c878',
+          tabBg: '#1a3a2e',
+          tabText: '#98fb98',
+          tabActive: '#2d5a44',
+          tabActiveText: '#f0fff0',
+          tabBorder: '#0d2818'
         },
         layout: 'centered',
         showLogo: true,
@@ -166,7 +246,15 @@ class BrowserCustomizer {
           darkPurple: '#5d3a26',
           primary: '#d2691e',
           accent: '#daa520',
-          text: '#faf0e6'
+          text: '#faf0e6',
+          urlBarBg: '#4a2c1a',
+          urlBarText: '#faf0e6',
+          urlBarBorder: '#d2691e',
+          tabBg: '#4a2c1a',
+          tabText: '#daa520',
+          tabActive: '#5d3a26',
+          tabActiveText: '#faf0e6',
+          tabBorder: '#3c2414'
         },
         layout: 'centered',
         showLogo: true,
@@ -181,7 +269,15 @@ class BrowserCustomizer {
           darkPurple: '#e6d8ff',
           primary: '#9370db',
           accent: '#dda0dd',
-          text: '#4b0082'
+          text: '#4b0082',
+          urlBarBg: '#ede4ff',
+          urlBarText: '#4b0082',
+          urlBarBorder: '#9370db',
+          tabBg: '#ede4ff',
+          tabText: '#9370db',
+          tabActive: '#e6d8ff',
+          tabActiveText: '#4b0082',
+          tabBorder: '#f8f4ff'
         },
         layout: 'centered',
         showLogo: true,
@@ -467,6 +563,14 @@ class BrowserCustomizer {
     root.style.setProperty('--primary', this.currentTheme.colors.primary);
     root.style.setProperty('--accent', this.currentTheme.colors.accent);
     root.style.setProperty('--text', this.currentTheme.colors.text);
+    root.style.setProperty('--url-bar-bg', this.currentTheme.colors.urlBarBg);
+    root.style.setProperty('--url-bar-text', this.currentTheme.colors.urlBarText);
+    root.style.setProperty('--url-bar-border', this.currentTheme.colors.urlBarBorder);
+    root.style.setProperty('--tab-bg', this.currentTheme.colors.tabBg);
+    root.style.setProperty('--tab-text', this.currentTheme.colors.tabText);
+    root.style.setProperty('--tab-active', this.currentTheme.colors.tabActive);
+    root.style.setProperty('--tab-active-text', this.currentTheme.colors.tabActiveText);
+    root.style.setProperty('--tab-border', this.currentTheme.colors.tabBorder);
 
     // Apply gradient to body if it exists
     const body = document.body;
@@ -701,6 +805,14 @@ class BrowserCustomizer {
       root.style.setProperty('--primary', theme.colors.primary);
       root.style.setProperty('--accent', theme.colors.accent);
       root.style.setProperty('--text', theme.colors.text);
+      root.style.setProperty('--url-bar-bg', theme.colors.urlBarBg);
+      root.style.setProperty('--url-bar-text', theme.colors.urlBarText);
+      root.style.setProperty('--url-bar-border', theme.colors.urlBarBorder);
+      root.style.setProperty('--tab-bg', theme.colors.tabBg);
+      root.style.setProperty('--tab-text', theme.colors.tabText);
+      root.style.setProperty('--tab-active', theme.colors.tabActive);
+      root.style.setProperty('--tab-active-text', theme.colors.tabActiveText);
+      root.style.setProperty('--tab-border', theme.colors.tabBorder);
 
       // Apply gradient to body if it exists
       const body = document.body;

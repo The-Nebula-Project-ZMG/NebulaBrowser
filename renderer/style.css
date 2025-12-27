@@ -38,6 +38,16 @@ html, body {
   --accent: hsl(var(--accent-h) var(--accent-s) var(--accent-l));
   --accent-600: hsl(var(--accent-h) var(--accent-s) 52%);
   --accent-700: hsl(var(--accent-h) var(--accent-s) 46%);
+  
+  /* URL bar and tab theme colors (defaults) */
+  --url-bar-bg: #1C2030;
+  --url-bar-text: #E0E0E0;
+  --url-bar-border: #3E4652;
+  --tab-bg: #161925;
+  --tab-text: #A4A7B3;
+  --tab-active: #1C2030;
+  --tab-active-text: #E0E0E0;
+  --tab-border: #2B3040;
 }
 
 /* TAB STRIP */
@@ -47,10 +57,8 @@ html, body {
   gap: 2px;
   /* Increase left padding to avoid overlap with OS window controls area */
   padding: 6px 10px 0 var(--window-controls-offset);
-  background:
-    linear-gradient(180deg, rgba(16,18,26,0.65), rgba(16,18,26,0.55))
-    , transparent;
-  border-bottom: 1px solid #232634; /* hairline under tabs */
+  background: var(--tab-bg);
+  border-bottom: 1px solid var(--tab-border);
   overflow-x: auto; /* scroll when many tabs */
   scrollbar-color: #444 #2a2a3c;   /* thumb and track for Firefox */
   scrollbar-width: thin;            /* slimmer track */
@@ -66,8 +74,7 @@ html, body {
   justify-content: space-between;
   align-items: center;
   padding: 10px 12px;
-  background:
-    linear-gradient(180deg, rgba(20,22,30,0.7), rgba(20,22,30,0.6));
+  background: var(--url-bar-bg);
   gap: 12px;
   /* flatter header to reduce paint cost */
   box-shadow: none;
@@ -76,6 +83,7 @@ html, body {
   z-index: 10000;
   -webkit-backdrop-filter: blur(var(--blur));
   backdrop-filter: blur(var(--blur));
+  border-bottom: 1px solid var(--url-bar-border);
 }
 
 /* Make the top nav a draggable region on macOS when we use a hidden titlebar.
@@ -116,10 +124,8 @@ html, body {
   padding: 6px 10px;
   border-radius: 999px; /* pill */
   /* glassy, accented border */
-  background:
-    linear-gradient(180deg, rgba(28,31,44,0.8), rgba(22,25,37,0.8)) padding-box,
-    linear-gradient(135deg, rgba(140, 86, 255, 0.35), rgba(62, 149, 255, 0.25)) border-box;
-  border: 1px solid transparent;
+  background: var(--url-bar-bg);
+  border: 1px solid var(--url-bar-border);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
@@ -133,7 +139,7 @@ html, body {
   flex: 1;
   background: transparent;
   border: none;
-  color: var(--text);
+  color: var(--url-bar-text);
   font-size: 14px;
   outline: none;
 }
@@ -411,12 +417,10 @@ body:has(#home-container.active) #downloads-btn {
   padding: 4px 10px; /* slimmer padding */
   margin: 0;
   height: 28px; /* reduce overall tab height */
-  color: #ddd;
+  color: var(--tab-text);
   /* sleek glass tile */
-  background:
-    linear-gradient(180deg, rgba(36,38,45,0.9), rgba(29,31,39,0.9)) padding-box,
-    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.25)) border-box;
-  border: 1px solid transparent;
+  background: var(--tab-bg);
+  border: 1px solid var(--tab-border);
   border-bottom: none; /* let it visually merge with the strip line */
   border-radius: 10px 10px 0 0; /* slightly tighter radius */
   cursor: pointer;
@@ -429,16 +433,13 @@ body:has(#home-container.active) #downloads-btn {
 }
 
 .tab:hover {
-  background:
-    linear-gradient(180deg, rgba(42,44,56,0.95), rgba(33,35,46,0.95)) padding-box,
-    linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.25)) border-box;
+  background: var(--tab-bg);
+  opacity: 0.85;
 }
 
 .tab.active {
-  color: #fff;
-  background:
-    linear-gradient(180deg, rgba(50,53,66,0.98), rgba(40,42,56,0.98)) padding-box,
-    linear-gradient(180deg, rgba(140, 86, 255, 0.35), rgba(62, 149, 255, 0.25)) border-box;
+  color: var(--tab-active-text);
+  background: var(--tab-active);
   box-shadow: 0 8px 22px rgba(0,0,0,0.35);
 }
 
