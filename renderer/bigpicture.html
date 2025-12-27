@@ -211,22 +211,212 @@
             <h1 class="section-title">Settings</h1>
             <p class="section-subtitle">Configure your browser</p>
           </div>
-          <div class="settings-grid">
-            <div class="settings-card" data-focusable tabindex="0" data-action="theme">
+          
+          <!-- Settings categories navigation -->
+          <div class="settings-tabs">
+            <button class="settings-tab active" data-settings-tab="themes" data-focusable tabindex="0">
               <span class="material-symbols-outlined">palette</span>
-              <span class="settings-label">Themes</span>
-            </div>
-            <div class="settings-card" data-focusable tabindex="0" data-action="privacy">
-              <span class="material-symbols-outlined">shield</span>
-              <span class="settings-label">Privacy</span>
-            </div>
-            <div class="settings-card" data-focusable tabindex="0" data-action="display">
+              <span>Themes</span>
+            </button>
+            <button class="settings-tab" data-settings-tab="display" data-focusable tabindex="0">
               <span class="material-symbols-outlined">display_settings</span>
-              <span class="settings-label">Display</span>
+              <span>Display</span>
+            </button>
+            <button class="settings-tab" data-settings-tab="privacy" data-focusable tabindex="0">
+              <span class="material-symbols-outlined">shield</span>
+              <span>Privacy</span>
+            </button>
+            <button class="settings-tab" data-settings-tab="about" data-focusable tabindex="0">
+              <span class="material-symbols-outlined">info</span>
+              <span>About</span>
+            </button>
+          </div>
+
+          <!-- Settings panels -->
+          <div class="settings-panels">
+            <!-- Themes Panel -->
+            <div class="settings-panel active" id="settings-panel-themes">
+              <h2 class="settings-panel-title">Theme Presets</h2>
+              <div class="theme-grid" id="bp-theme-grid">
+                <button class="theme-card" data-theme="default" data-focusable tabindex="0">
+                  <div class="theme-preview" style="background: linear-gradient(145deg, #121418, #1B1035);"></div>
+                  <span class="theme-name">Default</span>
+                </button>
+                <button class="theme-card" data-theme="ocean" data-focusable tabindex="0">
+                  <div class="theme-preview" style="background: linear-gradient(145deg, #1a365d, #2c5282);"></div>
+                  <span class="theme-name">Ocean</span>
+                </button>
+                <button class="theme-card" data-theme="forest" data-focusable tabindex="0">
+                  <div class="theme-preview" style="background: linear-gradient(145deg, #1a202c, #2d3748);"></div>
+                  <span class="theme-name">Forest</span>
+                </button>
+                <button class="theme-card" data-theme="sunset" data-focusable tabindex="0">
+                  <div class="theme-preview" style="background: linear-gradient(145deg, #744210, #c05621);"></div>
+                  <span class="theme-name">Sunset</span>
+                </button>
+                <button class="theme-card" data-theme="cyberpunk" data-focusable tabindex="0">
+                  <div class="theme-preview" style="background: linear-gradient(145deg, #0a0a0a, #2a0a3a);"></div>
+                  <span class="theme-name">Cyberpunk</span>
+                </button>
+                <button class="theme-card" data-theme="midnight-rose" data-focusable tabindex="0">
+                  <div class="theme-preview" style="background: linear-gradient(145deg, #1c1820, #3d3046);"></div>
+                  <span class="theme-name">Midnight Rose</span>
+                </button>
+                <button class="theme-card" data-theme="arctic-ice" data-focusable tabindex="0">
+                  <div class="theme-preview" style="background: linear-gradient(145deg, #f0f8ff, #d1e7ff);"></div>
+                  <span class="theme-name">Arctic Ice</span>
+                </button>
+                <button class="theme-card" data-theme="cherry-blossom" data-focusable tabindex="0">
+                  <div class="theme-preview" style="background: linear-gradient(145deg, #fff5f8, #ffd4db);"></div>
+                  <span class="theme-name">Cherry Blossom</span>
+                </button>
+                <button class="theme-card" data-theme="cosmic-purple" data-focusable tabindex="0">
+                  <div class="theme-preview" style="background: linear-gradient(145deg, #0f0524, #2d1b69);"></div>
+                  <span class="theme-name">Cosmic Purple</span>
+                </button>
+                <button class="theme-card" data-theme="emerald-dream" data-focusable tabindex="0">
+                  <div class="theme-preview" style="background: linear-gradient(145deg, #0d2818, #2d5a44);"></div>
+                  <span class="theme-name">Emerald Dream</span>
+                </button>
+                <button class="theme-card" data-theme="mocha-coffee" data-focusable tabindex="0">
+                  <div class="theme-preview" style="background: linear-gradient(145deg, #3c2414, #5d3a26);"></div>
+                  <span class="theme-name">Mocha Coffee</span>
+                </button>
+                <button class="theme-card" data-theme="lavender-fields" data-focusable tabindex="0">
+                  <div class="theme-preview" style="background: linear-gradient(145deg, #f8f4ff, #e6d8ff);"></div>
+                  <span class="theme-name">Lavender Fields</span>
+                </button>
+              </div>
             </div>
-            <div class="settings-card" data-focusable tabindex="0" data-action="exit-bigpicture">
-              <span class="material-symbols-outlined">desktop_windows</span>
-              <span class="settings-label">Desktop Mode</span>
+
+            <!-- Display Panel -->
+            <div class="settings-panel" id="settings-panel-display">
+              <h2 class="settings-panel-title">Display Settings</h2>
+              <div class="settings-option">
+                <div class="option-info">
+                  <span class="material-symbols-outlined">zoom_in</span>
+                  <div class="option-text">
+                    <span class="option-label">Display Scale</span>
+                    <span class="option-description">Adjust the default zoom level</span>
+                  </div>
+                </div>
+                <div class="option-control">
+                  <button class="scale-btn" id="bp-scale-down" data-focusable tabindex="0">
+                    <span class="material-symbols-outlined">remove</span>
+                  </button>
+                  <span class="scale-value" id="bp-scale-value">100%</span>
+                  <button class="scale-btn" id="bp-scale-up" data-focusable tabindex="0">
+                    <span class="material-symbols-outlined">add</span>
+                  </button>
+                </div>
+              </div>
+              <div class="settings-option">
+                <div class="option-info">
+                  <span class="material-symbols-outlined">desktop_windows</span>
+                  <div class="option-text">
+                    <span class="option-label">Exit Big Picture Mode</span>
+                    <span class="option-description">Return to standard desktop interface</span>
+                  </div>
+                </div>
+                <div class="option-control">
+                  <button class="action-button" id="bp-exit-desktop" data-focusable tabindex="0">
+                    <span class="material-symbols-outlined">logout</span>
+                    <span>Exit</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Privacy Panel -->
+            <div class="settings-panel" id="settings-panel-privacy">
+              <h2 class="settings-panel-title">Privacy & Data</h2>
+              <div class="settings-option">
+                <div class="option-info">
+                  <span class="material-symbols-outlined">delete_sweep</span>
+                  <div class="option-text">
+                    <span class="option-label">Clear Browsing Data</span>
+                    <span class="option-description">Delete cookies, cache, and site data</span>
+                  </div>
+                </div>
+                <div class="option-control">
+                  <button class="action-button danger" id="bp-clear-data" data-focusable tabindex="0">
+                    <span class="material-symbols-outlined">delete</span>
+                    <span>Clear All</span>
+                  </button>
+                </div>
+              </div>
+              <div class="settings-option">
+                <div class="option-info">
+                  <span class="material-symbols-outlined">history</span>
+                  <div class="option-text">
+                    <span class="option-label">Clear History</span>
+                    <span class="option-description">Delete browsing history</span>
+                  </div>
+                </div>
+                <div class="option-control">
+                  <button class="action-button" id="bp-clear-history" data-focusable tabindex="0">
+                    <span class="material-symbols-outlined">delete</span>
+                    <span>Clear</span>
+                  </button>
+                </div>
+              </div>
+              <div class="settings-option">
+                <div class="option-info">
+                  <span class="material-symbols-outlined">search_off</span>
+                  <div class="option-text">
+                    <span class="option-label">Clear Search History</span>
+                    <span class="option-description">Delete search query history</span>
+                  </div>
+                </div>
+                <div class="option-control">
+                  <button class="action-button" id="bp-clear-search" data-focusable tabindex="0">
+                    <span class="material-symbols-outlined">delete</span>
+                    <span>Clear</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- About Panel -->
+            <div class="settings-panel" id="settings-panel-about">
+              <h2 class="settings-panel-title">About Nebula Browser</h2>
+              <div class="about-info">
+                <div class="about-logo">
+                  <img src="../assets/images/Logos/Nebula-Icon.svg" alt="Nebula" class="about-logo-img">
+                  <div class="about-title">
+                    <h3>Nebula Browser</h3>
+                    <span id="bp-version">Version loading...</span>
+                  </div>
+                </div>
+                <div class="about-details">
+                  <div class="about-row">
+                    <span class="about-label">Electron</span>
+                    <span class="about-value" id="bp-electron-version">--</span>
+                  </div>
+                  <div class="about-row">
+                    <span class="about-label">Chromium</span>
+                    <span class="about-value" id="bp-chromium-version">--</span>
+                  </div>
+                  <div class="about-row">
+                    <span class="about-label">Node.js</span>
+                    <span class="about-value" id="bp-node-version">--</span>
+                  </div>
+                  <div class="about-row">
+                    <span class="about-label">Platform</span>
+                    <span class="about-value" id="bp-platform">--</span>
+                  </div>
+                </div>
+                <div class="about-actions">
+                  <button class="action-button" id="bp-github-link" data-focusable tabindex="0">
+                    <span class="ri-github-fill" style="font-size: 20px;"></span>
+                    <span>GitHub</span>
+                  </button>
+                  <button class="action-button" id="bp-copy-diagnostics" data-focusable tabindex="0">
+                    <span class="material-symbols-outlined">content_copy</span>
+                    <span>Copy Info</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </section>

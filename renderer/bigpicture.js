@@ -1184,6 +1184,7 @@ async function loadData() {
   await loadBookmarks();
   await loadHistory();
   renderQuickAccess();
+  initSettings();
 }
 
 async function loadBookmarks() {
@@ -1724,19 +1725,517 @@ function exitBigPictureMode() {
 function handleSettingsAction(action) {
   switch (action) {
     case 'theme':
-      showToast('Theme settings coming soon');
+      switchSettingsTab('themes');
       break;
     case 'privacy':
-      showToast('Privacy settings coming soon');
+      switchSettingsTab('privacy');
       break;
     case 'display':
-      showToast('Display settings coming soon');
+      switchSettingsTab('display');
       break;
     case 'exit-bigpicture':
       exitBigPictureMode();
       break;
     default:
       console.log('[BigPicture] Unknown settings action:', action);
+  }
+}
+
+// =============================================================================
+// SETTINGS FUNCTIONALITY
+// =============================================================================
+
+const DISPLAY_SCALE_KEY = 'nebula-display-scale';
+let currentDisplayScale = 100;
+let currentThemeName = 'default';
+
+// Theme definitions (matching customization.js)
+const THEMES = {
+  default: {
+    name: 'Default',
+    colors: {
+      bg: '#121418',
+      darkPurple: '#1B1035',
+      primary: '#7B2EFF',
+      accent: '#00C6FF',
+      text: '#E0E0E0'
+    }
+  },
+  ocean: {
+    name: 'Ocean',
+    colors: {
+      bg: '#1a365d',
+      darkPurple: '#2c5282',
+      primary: '#3182ce',
+      accent: '#00d9ff',
+      text: '#e2e8f0'
+    }
+  },
+  forest: {
+    name: 'Forest',
+    colors: {
+      bg: '#1a202c',
+      darkPurple: '#2d3748',
+      primary: '#68d391',
+      accent: '#9ae6b4',
+      text: '#f7fafc'
+    }
+  },
+  sunset: {
+    name: 'Sunset',
+    colors: {
+      bg: '#744210',
+      darkPurple: '#c05621',
+      primary: '#ed8936',
+      accent: '#fbb040',
+      text: '#fffaf0'
+    }
+  },
+  cyberpunk: {
+    name: 'Cyberpunk',
+    colors: {
+      bg: '#0a0a0a',
+      darkPurple: '#2a0a3a',
+      primary: '#ff0080',
+      accent: '#00ffff',
+      text: '#ffffff'
+    }
+  },
+  'midnight-rose': {
+    name: 'Midnight Rose',
+    colors: {
+      bg: '#1c1820',
+      darkPurple: '#3d3046',
+      primary: '#d4af37',
+      accent: '#ffd700',
+      text: '#f5f5dc'
+    }
+  },
+  'arctic-ice': {
+    name: 'Arctic Ice',
+    colors: {
+      bg: '#f0f8ff',
+      darkPurple: '#d1e7ff',
+      primary: '#4169e1',
+      accent: '#87ceeb',
+      text: '#2f4f4f'
+    }
+  },
+  'cherry-blossom': {
+    name: 'Cherry Blossom',
+    colors: {
+      bg: '#fff5f8',
+      darkPurple: '#ffd4db',
+      primary: '#ff69b4',
+      accent: '#ffb6c1',
+      text: '#8b4513'
+    }
+  },
+  'cosmic-purple': {
+    name: 'Cosmic Purple',
+    colors: {
+      bg: '#0f0524',
+      darkPurple: '#2d1b69',
+      primary: '#9400d3',
+      accent: '#da70d6',
+      text: '#e6e6fa'
+    }
+  },
+  'emerald-dream': {
+    name: 'Emerald Dream',
+    colors: {
+      bg: '#0d2818',
+      darkPurple: '#2d5a44',
+      primary: '#50c878',
+      accent: '#00fa9a',
+      text: '#f0fff0'
+    }
+  },
+  'mocha-coffee': {
+    name: 'Mocha Coffee',
+    colors: {
+      bg: '#3c2414',
+      darkPurple: '#5d3a26',
+      primary: '#d2691e',
+      accent: '#deb887',
+      text: '#faf0e6'
+    }
+  },
+  'lavender-fields': {
+    name: 'Lavender Fields',
+    colors: {
+      bg: '#f8f4ff',
+      darkPurple: '#e6d8ff',
+      primary: '#9370db',
+      accent: '#dda0dd',
+      text: '#4b0082'
+    }
+  }
+};
+
+function initSettings() {
+  console.log('[BigPicture] Initializing settings...');
+  
+  // Load saved settings
+  loadSavedSettings();
+  
+  // Initialize settings tabs
+  initSettingsTabs();
+  
+  // Initialize theme selection
+  initThemeSelection();
+  
+  // Initialize display scale controls
+  initDisplayScaleControls();
+  
+  // Initialize privacy controls
+  initPrivacyControls();
+  
+  // Initialize about panel
+  initAboutPanel();
+}
+
+function loadSavedSettings() {
+  // Load display scale
+  try {
+    const savedScale = localStorage.getItem(DISPLAY_SCALE_KEY);
+    if (savedScale) {
+      currentDisplayScale = parseInt(savedScale, 10);
+      updateScaleDisplay();
+    }
+  } catch (err) {
+    console.warn('[BigPicture] Failed to load display scale:', err);
+  }
+  
+  // Load theme
+  try {
+    const savedTheme = localStorage.getItem('nebula-theme-name');
+    if (savedTheme && THEMES[savedTheme]) {
+      currentThemeName = savedTheme;
+      applyTheme(THEMES[savedTheme]);
+      highlightActiveTheme();
+    }
+  } catch (err) {
+    console.warn('[BigPicture] Failed to load theme:', err);
+  }
+}
+
+function initSettingsTabs() {
+  document.querySelectorAll('.settings-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabName = tab.dataset.settingsTab;
+      if (tabName) {
+        switchSettingsTab(tabName);
+      }
+    });
+  });
+}
+
+function switchSettingsTab(tabName) {
+  // Update tab buttons
+  document.querySelectorAll('.settings-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.settingsTab === tabName);
+  });
+  
+  // Update panels
+  document.querySelectorAll('.settings-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.id === `settings-panel-${tabName}`);
+  });
+  
+  // Update focusable elements
+  setTimeout(() => {
+    updateFocusableElements();
+  }, 50);
+  
+  playNavSound();
+}
+
+function initThemeSelection() {
+  document.querySelectorAll('.theme-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const themeName = card.dataset.theme;
+      if (themeName && THEMES[themeName]) {
+        selectTheme(themeName);
+      }
+    });
+  });
+  
+  // Highlight current theme
+  highlightActiveTheme();
+}
+
+function selectTheme(themeName) {
+  if (!THEMES[themeName]) return;
+  
+  currentThemeName = themeName;
+  const theme = THEMES[themeName];
+  
+  // Apply theme locally
+  applyTheme(theme);
+  
+  // Save to localStorage
+  try {
+    localStorage.setItem('nebula-theme-name', themeName);
+    
+    // Also save the full theme data for other pages
+    const fullThemeData = {
+      name: theme.name,
+      colors: {
+        bg: theme.colors.bg,
+        darkBlue: theme.colors.darkPurple,
+        darkPurple: theme.colors.darkPurple,
+        primary: theme.colors.primary,
+        accent: theme.colors.accent,
+        text: theme.colors.text,
+        urlBarBg: theme.colors.darkPurple,
+        urlBarText: theme.colors.text,
+        urlBarBorder: theme.colors.primary,
+        tabBg: theme.colors.darkPurple,
+        tabText: theme.colors.text,
+        tabActive: theme.colors.bg,
+        tabActiveText: theme.colors.text,
+        tabBorder: theme.colors.bg
+      },
+      gradient: `linear-gradient(145deg, ${theme.colors.bg} 0%, ${theme.colors.darkPurple} 100%)`
+    };
+    localStorage.setItem('browserTheme', JSON.stringify(fullThemeData));
+  } catch (err) {
+    console.warn('[BigPicture] Failed to save theme:', err);
+  }
+  
+  // Notify main process
+  if (ipcRenderer && ipcRenderer.send) {
+    ipcRenderer.send('theme-changed', {
+      name: themeName,
+      colors: theme.colors
+    });
+  }
+  
+  highlightActiveTheme();
+  showToast(`Theme changed to ${theme.name}`);
+  playSelectSound();
+}
+
+function highlightActiveTheme() {
+  document.querySelectorAll('.theme-card').forEach(card => {
+    card.classList.toggle('active', card.dataset.theme === currentThemeName);
+  });
+}
+
+function initDisplayScaleControls() {
+  const scaleDown = document.getElementById('bp-scale-down');
+  const scaleUp = document.getElementById('bp-scale-up');
+  const exitDesktop = document.getElementById('bp-exit-desktop');
+  
+  if (scaleDown) {
+    scaleDown.addEventListener('click', () => {
+      adjustDisplayScale(-10);
+    });
+  }
+  
+  if (scaleUp) {
+    scaleUp.addEventListener('click', () => {
+      adjustDisplayScale(10);
+    });
+  }
+  
+  if (exitDesktop) {
+    exitDesktop.addEventListener('click', () => {
+      exitBigPictureMode();
+    });
+  }
+  
+  updateScaleDisplay();
+}
+
+function adjustDisplayScale(delta) {
+  const newScale = Math.min(300, Math.max(50, currentDisplayScale + delta));
+  if (newScale !== currentDisplayScale) {
+    currentDisplayScale = newScale;
+    updateScaleDisplay();
+    saveDisplayScale();
+    showToast(`Display scale: ${currentDisplayScale}%`);
+    playNavSound();
+  }
+}
+
+function updateScaleDisplay() {
+  const scaleValue = document.getElementById('bp-scale-value');
+  if (scaleValue) {
+    scaleValue.textContent = `${currentDisplayScale}%`;
+  }
+}
+
+function saveDisplayScale() {
+  try {
+    localStorage.setItem(DISPLAY_SCALE_KEY, currentDisplayScale.toString());
+    
+    // Notify main process to update zoom level
+    if (ipcRenderer && ipcRenderer.send) {
+      ipcRenderer.send('set-display-scale', currentDisplayScale);
+    }
+  } catch (err) {
+    console.warn('[BigPicture] Failed to save display scale:', err);
+  }
+}
+
+function initPrivacyControls() {
+  const clearDataBtn = document.getElementById('bp-clear-data');
+  const clearHistoryBtn = document.getElementById('bp-clear-history');
+  const clearSearchBtn = document.getElementById('bp-clear-search');
+  
+  if (clearDataBtn) {
+    clearDataBtn.addEventListener('click', async () => {
+      if (await confirmAction('Clear all browsing data? This cannot be undone.')) {
+        await clearAllBrowsingData();
+      }
+    });
+  }
+  
+  if (clearHistoryBtn) {
+    clearHistoryBtn.addEventListener('click', async () => {
+      if (await confirmAction('Clear browsing history?')) {
+        await clearBrowsingHistory();
+      }
+    });
+  }
+  
+  if (clearSearchBtn) {
+    clearSearchBtn.addEventListener('click', async () => {
+      if (await confirmAction('Clear search history?')) {
+        await clearSearchHistory();
+      }
+    });
+  }
+}
+
+async function confirmAction(message) {
+  // Simple confirmation using toast - could be enhanced with a modal
+  showToast(message + ' Press A to confirm.');
+  return true; // For now, auto-confirm. Could implement modal confirmation.
+}
+
+async function clearAllBrowsingData() {
+  try {
+    showToast('Clearing all browsing data...');
+    
+    if (ipcRenderer && ipcRenderer.invoke) {
+      await ipcRenderer.invoke('clear-browser-data');
+    }
+    
+    // Also clear localStorage
+    localStorage.removeItem('siteHistory');
+    state.history = [];
+    renderHistory();
+    renderRecentSites();
+    
+    showToast('All browsing data cleared');
+    playSelectSound();
+  } catch (err) {
+    console.error('[BigPicture] Failed to clear browsing data:', err);
+    showToast('Failed to clear data');
+  }
+}
+
+async function clearBrowsingHistory() {
+  try {
+    if (ipcRenderer && ipcRenderer.invoke) {
+      await ipcRenderer.invoke('clear-site-history');
+    }
+    
+    localStorage.removeItem('siteHistory');
+    state.history = [];
+    renderHistory();
+    renderRecentSites();
+    
+    showToast('Browsing history cleared');
+    playSelectSound();
+  } catch (err) {
+    console.error('[BigPicture] Failed to clear history:', err);
+    showToast('Failed to clear history');
+  }
+}
+
+async function clearSearchHistory() {
+  try {
+    if (ipcRenderer && ipcRenderer.invoke) {
+      await ipcRenderer.invoke('clear-search-history');
+    }
+    
+    showToast('Search history cleared');
+    playSelectSound();
+  } catch (err) {
+    console.error('[BigPicture] Failed to clear search history:', err);
+    showToast('Failed to clear search history');
+  }
+}
+
+async function initAboutPanel() {
+  // Load version info
+  try {
+    if (ipcRenderer && ipcRenderer.invoke) {
+      const appInfo = await ipcRenderer.invoke('get-app-info');
+      
+      if (appInfo) {
+        const versionEl = document.getElementById('bp-version');
+        const electronEl = document.getElementById('bp-electron-version');
+        const chromiumEl = document.getElementById('bp-chromium-version');
+        const nodeEl = document.getElementById('bp-node-version');
+        const platformEl = document.getElementById('bp-platform');
+        
+        if (versionEl) versionEl.textContent = `Version ${appInfo.version || 'Unknown'}`;
+        if (electronEl) electronEl.textContent = appInfo.electron || '--';
+        if (chromiumEl) chromiumEl.textContent = appInfo.chrome || '--';
+        if (nodeEl) nodeEl.textContent = appInfo.node || '--';
+        if (platformEl) platformEl.textContent = `${appInfo.platform || ''} ${appInfo.arch || ''}`.trim() || '--';
+      }
+    }
+  } catch (err) {
+    console.warn('[BigPicture] Failed to load app info:', err);
+  }
+  
+  // GitHub link
+  const githubBtn = document.getElementById('bp-github-link');
+  if (githubBtn) {
+    githubBtn.addEventListener('click', () => {
+      navigateTo('https://github.com/Bobbybear007/NebulaBrowser');
+    });
+  }
+  
+  // Copy diagnostics
+  const copyBtn = document.getElementById('bp-copy-diagnostics');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      await copyDiagnostics();
+    });
+  }
+}
+
+async function copyDiagnostics() {
+  try {
+    const versionEl = document.getElementById('bp-version');
+    const electronEl = document.getElementById('bp-electron-version');
+    const chromiumEl = document.getElementById('bp-chromium-version');
+    const nodeEl = document.getElementById('bp-node-version');
+    const platformEl = document.getElementById('bp-platform');
+    
+    const diagnostics = [
+      'Nebula Browser Diagnostics',
+      '========================',
+      versionEl ? versionEl.textContent : '',
+      `Electron: ${electronEl ? electronEl.textContent : '--'}`,
+      `Chromium: ${chromiumEl ? chromiumEl.textContent : '--'}`,
+      `Node.js: ${nodeEl ? nodeEl.textContent : '--'}`,
+      `Platform: ${platformEl ? platformEl.textContent : '--'}`,
+      `Date: ${new Date().toISOString()}`
+    ].join('\n');
+    
+    await navigator.clipboard.writeText(diagnostics);
+    showToast('Diagnostics copied to clipboard');
+    playSelectSound();
+  } catch (err) {
+    console.error('[BigPicture] Failed to copy diagnostics:', err);
+    showToast('Failed to copy diagnostics');
   }
 }
 

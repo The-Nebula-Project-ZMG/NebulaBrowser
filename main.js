@@ -636,6 +636,18 @@ ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
 
+ipcMain.handle('get-app-info', () => {
+  return {
+    version: app.getVersion(),
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    node: process.versions.node,
+    v8: process.versions.v8,
+    platform: process.platform,
+    arch: process.arch
+  };
+});
+
 // --- window control handlers (only registered once now)
 ipcMain.handle('window-minimize', event => {
   BrowserWindow.fromWebContents(event.sender).minimize();
@@ -704,6 +716,23 @@ ipcMain.handle('save-search-history', async (event, history) => {
 // debug: log default‐homepage changes from renderer
 ipcMain.on('homepage-changed', (event, url) => {
   console.log('[MAIN] homepage-changed →', url);
+});
+
+// Handle theme changes - broadcast to all windows
+ipcMain.on('theme-changed', (event, theme) => {
+  console.log('[MAIN] theme-changed →', theme?.name || 'unknown');
+  // Broadcast theme change to all browser windows
+  BrowserWindow.getAllWindows().forEach(win => {
+    if (win.webContents && win.webContents.id !== event.sender.id) {
+      win.webContents.send('theme-changed', theme);
+    }
+  });
+});
+
+// Handle display scale changes
+ipcMain.on('set-display-scale', (event, scale) => {
+  console.log('[MAIN] set-display-scale →', scale);
+  // Could be used to persist scale setting or apply to all webviews
 });
 
 // Bookmark management
