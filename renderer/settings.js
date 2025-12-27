@@ -11,6 +11,7 @@ const WEATHER_UNIT_KEY = 'nebula-weather-unit'; // 'auto' | 'c' | 'f'
 const HOME_SEARCH_Y_KEY = 'nebula-home-search-y'; // number (vh)
 const HOME_BOOKMARKS_Y_KEY = 'nebula-home-bookmarks-y'; // number (vh)
 const HOME_GLANCE_CORNER_KEY = 'nebula-home-glance-corner'; // 'br'|'bl'|'tr'|'tl'
+const DISPLAY_SCALE_KEY = 'nebula-display-scale'; // number (50-300)
 
 function showStatus(message) {
   if (statusText && statusDiv) {
@@ -167,6 +168,27 @@ window.addEventListener('DOMContentLoaded', () => {
       notify();
     }));
   } catch (e) { console.warn('Home layout control setup failed', e); }
+
+  // Display scale controls
+  try {
+    const scaleSlider = document.getElementById('display-scale-slider');
+    const scaleValue = document.getElementById('display-scale-value');
+    
+    const initScale = Number(localStorage.getItem(DISPLAY_SCALE_KEY) || 100);
+    if (scaleSlider) {
+      scaleSlider.value = String(initScale);
+      if (scaleValue) scaleValue.textContent = initScale + '%';
+    }
+    
+    if (scaleSlider) {
+      scaleSlider.addEventListener('input', () => {
+        const val = Number(scaleSlider.value);
+        if (scaleValue) scaleValue.textContent = val + '%';
+        localStorage.setItem(DISPLAY_SCALE_KEY, String(val));
+        showStatus(`Display scale set to ${val}%`);
+      });
+    }
+  } catch (e) { console.warn('Display scale setup failed', e); }
 });
 
 // Tabs: simple controller

@@ -1098,6 +1098,24 @@ window.addEventListener('DOMContentLoaded', () => {
       console.error('Error applying saved theme:', err);
     }
   }
+
+  // Initialize display scale (zoom) from localStorage
+  const savedDisplayScale = localStorage.getItem('nebula-display-scale');
+  if (savedDisplayScale) {
+    try {
+      const scale = Number(savedDisplayScale);
+      if (scale > 0 && scale <= 300) {
+        const zoomFactor = scale / 100;
+        if (ipcRenderer && typeof ipcRenderer.invoke === 'function') {
+          ipcRenderer.invoke('set-zoom-factor', zoomFactor).catch(err => {
+            console.error('Error setting zoom factor:', err);
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error applying saved display scale:', err);
+    }
+  }
   
   // Initial boot
   createTab();

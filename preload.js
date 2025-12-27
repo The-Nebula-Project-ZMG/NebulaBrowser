@@ -134,6 +134,15 @@ contextBridge.exposeInMainWorld('downloadsAPI', {
   onScanResult: (handler) => ipcRenderer.on('downloads-scan-result', (_e, payload) => handler(payload))
 });
 
+// Auto-Updater API exposed to renderer
+contextBridge.exposeInMainWorld('updaterAPI', {
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  onUpdateStatus: (handler) => ipcRenderer.on('update-status', (_e, payload) => handler(payload))
+});
+
 // ----------------------------------------
 // Plugin renderer preloads
 // ----------------------------------------

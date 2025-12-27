@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, session, screen, shell, dialog, Menu, clipboard, webContents } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
 const path = require('path');
@@ -140,14 +141,28 @@ function createWindow(startUrl) {
   perfMarks.browserWindow_instantiated = performance.now();
 
   // Intercept window.open() requests and route them into the existing window as a new tab
-  // instead of spawning separate BrowserWindows. We still allow a small OAuth allowlist
-  // (accounts.google.com, login.microsoftonline.com, oauth, sso) to open real popups if
-  // the flow depends on window.opener relationships. Everything else becomes a new tab.
+  // instead of spawning separate BrowserWindows. We allow a small list of specific OAuth
+  // domains to open real popups if the flow depends on window.opener relationships.
+  // Everything else becomes a new tab.
   win.webContents.setWindowOpenHandler((details) => {
     const { url } = details;
     if (!/^https?:\/\//i.test(url)) return { action: 'deny' };
-    // OAuth / SSO allowlist heuristic
-    if (/accounts\.google\.com|microsoftonline\.com|oauth|login|signin|sso/i.test(url)) {
+    // OAuth / SSO allowlist - only allow specific authentication provider domains
+    // Be restrictive to prevent normal links from opening in new windows
+    const oauthDomains = [
+      'accounts.google.com',
+      'login.microsoftonline.com',
+      'appleid.apple.com',
+      'github.com/login',
+      'auth0.com',
+      'okta.com',
+      'login.live.com',
+      'facebook.com/dialog',
+      'api.twitter.com/oauth',
+      'discord.com/oauth2'
+    ];
+    const isOAuthDomain = oauthDomains.some(domain => url.toLowerCase().includes(domain.toLowerCase()));
+    if (isOAuthDomain) {
       return { action: 'allow' }; // preserve popup semantics for complex auth flows
     }
     // Forward to renderer to open as tab
@@ -166,18 +181,31 @@ function createWindow(startUrl) {
   // above now governs popup behavior.
 
   // ensure all embedded <webview> tags behave predictably without heavy injections
-  win.webContents.on('did-attach-webview', (event, webContents) => {
+  win.webContents.on('did-attach-webview', (event, webviewContents) => {
     // Route <webview> window.open() calls to tabs unless OAuth allowlist matched
-    webContents.setWindowOpenHandler((details) => {
+    webviewContents.setWindowOpenHandler((details) => {
       const { url } = details;
       if (!/^https?:\/\//i.test(url)) return { action: 'deny' };
-      if (/accounts\.google\.com|microsoftonline\.com|oauth|login|signin|sso/i.test(url)) {
+      // OAuth / SSO allowlist - only allow specific authentication provider domains
+      const oauthDomains = [
+        'accounts.google.com',
+        'login.microsoftonline.com',
+        'appleid.apple.com',
+        'github.com/login',
+        'auth0.com',
+        'okta.com',
+        'login.live.com',
+        'facebook.com/dialog',
+        'api.twitter.com/oauth',
+        'discord.com/oauth2'
+      ];
+      const isOAuthDomain = oauthDomains.some(domain => url.toLowerCase().includes(domain.toLowerCase()));
+      if (isOAuthDomain) {
         return { action: 'allow' }; // keep popup for auth
       }
-      // Send to the owning window (embedder) to open a new tab
+      // Send to main window's webContents to open a new tab
       try {
-        const host = webContents.hostWebContents || webContents;
-        host.send('open-url-new-tab', url);
+        win.webContents.send('open-url-new-tab', url);
       } catch {}
       return { action: 'deny' };
     });
@@ -364,6 +392,61 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // --- Auto-Updater Setup ---
+  // Configure auto-updater logging
+  autoUpdater.logger = require('electron-updater').autoUpdater.logger;
+  if (autoUpdater.logger) autoUpdater.logger.transports.file.level = 'info';
+
+  // Check for updates after a short delay to not block startup
+  setTimeout(() => {
+    autoUpdater.checkForUpdatesAndNotify().catch(err => {
+      console.log('[AutoUpdater] Update check failed:', err.message);
+    });
+  }, 3000);
+
+  // Auto-updater event handlers
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[AutoUpdater] Checking for updates...');
+    broadcastToAll('update-status', { status: 'checking' });
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    console.log('[AutoUpdater] Update available:', info.version);
+    broadcastToAll('update-status', { status: 'available', version: info.version });
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    console.log('[AutoUpdater] No update available. Current version:', app.getVersion());
+    broadcastToAll('update-status', { status: 'not-available', currentVersion: app.getVersion() });
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    console.log(`[AutoUpdater] Download progress: ${progress.percent.toFixed(1)}%`);
+    broadcastToAll('update-status', { status: 'downloading', progress: progress.percent });
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log('[AutoUpdater] Update downloaded:', info.version);
+    broadcastToAll('update-status', { status: 'downloaded', version: info.version });
+    // Optionally prompt user to restart
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Update Ready',
+      message: `Nebula ${info.version} has been downloaded.`,
+      detail: 'The update will be installed when you restart the app.',
+      buttons: ['Restart Now', 'Later']
+    }).then(result => {
+      if (result.response === 0) {
+        autoUpdater.quitAndInstall();
+      }
+    });
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('[AutoUpdater] Error:', err.message);
+    broadcastToAll('update-status', { status: 'error', message: err.message });
+  });
 });
 
 // Quit when all windows are closed.
@@ -372,6 +455,33 @@ app.on('window-all-closed', () => {
 });
 
 // ipcMain handlers
+
+// --- Auto-Update IPC handlers ---
+ipcMain.handle('check-for-updates', async () => {
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return { success: true, updateInfo: result?.updateInfo };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('download-update', async () => {
+  try {
+    await autoUpdater.downloadUpdate();
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('install-update', () => {
+  autoUpdater.quitAndInstall();
+});
+
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
 
 // --- window control handlers (only registered once now)
 ipcMain.handle('window-minimize', event => {
@@ -558,6 +668,30 @@ ipcMain.handle('zoom-out', event => {
   const z = Math.max(current - 0.1, 0.25);
   wc.setZoomFactor(z);
   return z;
+});
+
+ipcMain.handle('get-display-scale', async (event) => {
+  // Try to read from localStorage data (user data path)
+  const userDataPath = app.getPath('userData');
+  const storageFile = path.join(userDataPath, 'localStorage');
+  
+  try {
+    // Try to get from electron store or persistent storage
+    // For now, we'll just return a default and let the app set it
+    // The display scale is stored in localStorage on the client side
+    return 100; // Default to 100%
+  } catch (err) {
+    return 100; // Default to 100%
+  }
+});
+
+ipcMain.handle('set-zoom-factor', (event, zoomFactor) => {
+  const wc = BrowserWindow.fromWebContents(event.sender).webContents;
+  if (wc && typeof wc.setZoomFactor === 'function') {
+    wc.setZoomFactor(zoomFactor);
+    return true;
+  }
+  return false;
 });
 
 // allow renderer to pop a tab into its own window
@@ -750,7 +884,7 @@ ipcMain.handle('get-electron-versions', async (event, buildType = 'stable') => {
 });
 
 ipcMain.handle('upgrade-electron', async (event, buildType = 'stable') => {
-  const { execFile } = require('child_process');
+  const { exec } = require('child_process');
   const packageName = buildType === 'nightly' ? 'electron-nightly' : 'electron';
   
   return new Promise((resolve) => {
@@ -758,10 +892,10 @@ ipcMain.handle('upgrade-electron', async (event, buildType = 'stable') => {
     const otherPackage = buildType === 'nightly' ? 'electron' : 'electron-nightly';
     
     // Run npm install to upgrade the package
-    const args = ['install', '--save-dev', packageName + '@latest'];
+    const command = `npm install --save-dev ${packageName}@latest`;
     
-    execFile('npm', args, 
-      { cwd: __dirname, shell: true, maxBuffer: 10 * 1024 * 1024 },
+    exec(command, 
+      { cwd: __dirname, maxBuffer: 10 * 1024 * 1024 },
       (error, stdout, stderr) => {
         if (error) {
           console.error('Upgrade failed:', error);

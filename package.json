@@ -1,7 +1,7 @@
 {
   "name": "nebula",
   "productName": "Nebula",
-  "version": "1.0.0",
+  "version": "1.3.2",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -14,16 +14,24 @@
   "description": "",
   "dependencies": {
     "dompurify": "^3.1.6",
+    "electron-updater": "^6.6.2",
     "highlight.js": "^11.9.0",
     "marked": "^12.0.2"
   },
   "devDependencies": {
-    "electron": "^37.3.1",
+    "electron": "^39.2.7",
     "electron-builder": "^23.0.0",
     "electron-nightly": "^39.0.0-nightly.20250811"
   },
   "build": {
     "appId": "com.andrewzambazos.nebula",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Bobbybear007",
+        "repo": "NebulaBrowser"
+      }
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "assets/images/Logos/Nebula-Favicon.icns"
