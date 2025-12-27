@@ -8,12 +8,16 @@
     "start:steamos": "electron . --ozone-platform=x11 --disable-gpu-compositing --disable-gpu-vsync --no-sandbox --disable-dev-shm-usage --disable-features=VizDisplayCompositor",
     "start:linux-safe": "electron . --disable-gpu --disable-gpu-compositing --no-sandbox",
     "dist": "electron-builder",
+    "dist:appimage": "electron-builder --linux AppImage",
     "run": "electron ."
   },
   "keywords": [],
-  "author": "",
+  "author": {
+    "name": "Andrew Zambazos",
+    "email": "nebula@example.com"
+  },
   "license": "ISC",
-  "description": "",
+  "description": "A modern web browser built with Electron",
   "dependencies": {
     "dompurify": "^3.1.6",
     "electron-updater": "^6.6.2",
@@ -43,13 +47,10 @@
     },
     "linux": {
       "icon": "assets/images/Logos/Nebula-Favicon.png",
+      "maintainer": "Andrew Zambazos <nebula@example.com>",
       "target": [
         {
           "target": "AppImage",
-          "arch": ["x64"]
-        },
-        {
-          "target": "deb",
           "arch": ["x64"]
         }
       ],
