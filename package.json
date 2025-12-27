@@ -5,7 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "start:steamos": "electron . --ozone-platform=x11 --disable-gpu --disable-gpu-compositing --disable-software-rasterizer --no-sandbox --disable-dev-shm-usage --disable-features=VizDisplayCompositor",
+    "start:steamos": "electron . --ozone-platform=x11 --use-angle=gl --angle-platform-type=x11 --in-process-gpu --no-sandbox --disable-dev-shm-usage --disable-features=VizDisplayCompositor",
     "start:linux-safe": "electron . --disable-gpu --disable-gpu-compositing --no-sandbox",
     "dist": "electron-builder",
     "dist:appimage": "electron-builder --linux AppImage",

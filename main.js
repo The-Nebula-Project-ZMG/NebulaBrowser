@@ -59,22 +59,19 @@ if (process.platform === 'linux') {
   
   if (isSteamOS) {
     console.log(`[GPU] SteamOS/Gamescope DETECTED: ${detectionReason}`);
-    console.log('[GPU] Disabling hardware acceleration - using software rendering...');
+    console.log('[GPU] Applying SteamOS-specific GPU flags for webview rendering...');
     
-    // On SteamOS, hardware acceleration causes webview rendering issues
-    // Software rendering is more stable under Gamescope
-    app.disableHardwareAcceleration();
-    
-    // Ozone platform
+    // SteamOS GPU flags - use ANGLE for rendering
     app.commandLine.appendSwitch('ozone-platform', 'x11');
+    app.commandLine.appendSwitch('use-angle', 'gl');
+    app.commandLine.appendSwitch('angle-platform-type', 'x11');
     
-    // Disable GPU compositing completely - use software
-    app.commandLine.appendSwitch('disable-gpu');
-    app.commandLine.appendSwitch('disable-gpu-compositing');
-    app.commandLine.appendSwitch('disable-software-rasterizer');
+    // GPU process settings
+    app.commandLine.appendSwitch('in-process-gpu');
+    app.commandLine.appendSwitch('disable-gpu-vsync');
     
     // Feature flags
-    app.commandLine.appendSwitch('enable-features', 'UseOzonePlatform');
+    app.commandLine.appendSwitch('enable-features', 'VulkanFromANGLE,UseOzonePlatform');
     app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
   } else {
     console.log('[GPU] Standard Linux environment detected');
