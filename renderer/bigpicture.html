@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nebula - Big Picture Mode</title>
+  <link rel="icon" href="../assets/images/Logos/Nebula-Icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="bigpicture.css">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@3/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body>
+  <!-- Audio feedback for navigation -->
+  <audio id="navSound" preload="auto">
+    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQ==" type="audio/wav">
+  </audio>
+  <audio id="selectSound" preload="auto">
+    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQ==" type="audio/wav">
+  </audio>
+
+  <!-- Main container with ambient background -->
+  <div class="bp-container">
+    <!-- Animated background -->
+    <div class="bp-background">
+      <div class="bg-gradient"></div>
+      <div class="bg-particles"></div>
+      <div class="bg-glow"></div>
+    </div>
+
+    <!-- Top header bar -->
+    <header class="bp-header">
+      <div class="header-left">
+        <img src="../assets/images/Logos/Nebula-Icon.svg" alt="Nebula" class="bp-logo">
+        <span class="bp-title">Nebula</span>
+      </div>
+      <div class="header-center">
+        <div class="clock-widget">
+          <span id="bp-time" class="time">--:--</span>
+          <span id="bp-date" class="date">---</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="status-icons">
+          <span id="bp-wifi" class="status-icon" title="Connected">
+            <span class="material-symbols-outlined">wifi</span>
+          </span>
+          <span id="bp-battery" class="status-icon" title="Battery">
+            <span class="material-symbols-outlined">battery_full</span>
+          </span>
+        </div>
+        <button id="exitBigPicture" class="bp-exit-btn" data-focusable tabindex="0">
+          <span class="material-symbols-outlined">close</span>
+          <span class="btn-label">Exit</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main navigation area -->
+    <main class="bp-main">
+      <!-- Left sidebar navigation -->
+      <nav class="bp-sidebar">
+        <div class="nav-items">
+          <button class="nav-item active" data-section="home" data-focusable tabindex="0">
+            <span class="material-symbols-outlined">home</span>
+            <span class="nav-label">Home</span>
+          </button>
+          <button class="nav-item" data-section="browse" data-focusable tabindex="0">
+            <span class="material-symbols-outlined">language</span>
+            <span class="nav-label">Browse</span>
+          </button>
+          <button class="nav-item" data-section="bookmarks" data-focusable tabindex="0">
+            <span class="material-symbols-outlined">bookmarks</span>
+            <span class="nav-label">Bookmarks</span>
+          </button>
+          <button class="nav-item" data-section="history" data-focusable tabindex="0">
+            <span class="material-symbols-outlined">history</span>
+            <span class="nav-label">History</span>
+          </button>
+          <button class="nav-item" data-section="downloads" data-focusable tabindex="0">
+            <span class="material-symbols-outlined">download</span>
+            <span class="nav-label">Downloads</span>
+          </button>
+          
+        </div>
+        <div class="nav-footer">
+          <button class="nav-item" data-section="settings" data-focusable tabindex="0">
+            <span class="material-symbols-outlined">settings</span>
+            <span class="nav-label">Settings</span>
+          </button>
+        </div>
+      </nav>
+
+      <!-- Content area -->
+      <div class="bp-content">
+        <!-- Webview container for browsing -->
+        <div id="webview-container" class="webview-container hidden"></div>
+        
+        <!-- Home section -->
+        <section id="section-home" class="bp-section active">
+          <div class="section-header">
+            <h1 class="section-title">
+              <span id="greeting-text">Welcome back</span>
+            </h1>
+            <p class="section-subtitle">What would you like to browse today?</p>
+          </div>
+
+          <!-- Search card -->
+          <div class="search-card" data-focusable tabindex="0">
+            <div class="search-icon">
+              <span class="material-symbols-outlined">search</span>
+            </div>
+            <input type="text" id="bp-search" class="search-input" placeholder="Search the web or enter URL..." autocomplete="off">
+            <div class="search-hint">
+              <span class="key-hint">A</span> Search
+            </div>
+          </div>
+
+          <!-- Quick access grid -->
+          <div class="quick-access">
+            <h2 class="subsection-title">Quick Access</h2>
+            <div class="tile-grid" id="quickAccessGrid">
+              <!-- Tiles will be populated dynamically -->
+            </div>
+          </div>
+
+          <!-- Recent sites -->
+          <div class="recent-sites">
+            <h2 class="subsection-title">Continue Browsing</h2>
+            <div class="horizontal-scroll" id="recentSitesScroll">
+              <!-- Recent sites will be populated dynamically -->
+            </div>
+          </div>
+        </section>
+
+        <!-- Browse section (for webview) -->
+        <section id="section-browse" class="bp-section">
+          <!-- Webview container is outside sections -->
+        </section>
+
+        <!-- Bookmarks section -->
+        <section id="section-bookmarks" class="bp-section">
+          <div class="section-header">
+            <h1 class="section-title">Bookmarks</h1>
+            <p class="section-subtitle">Your saved websites</p>
+          </div>
+          <div class="tile-grid large" id="bookmarksGrid">
+            <!-- Bookmarks will be populated dynamically -->
+          </div>
+        </section>
+
+        <!-- History section -->
+        <section id="section-history" class="bp-section">
+          <div class="section-header">
+            <h1 class="section-title">History</h1>
+            <p class="section-subtitle">Recently visited sites</p>
+          </div>
+          <div class="list-container" id="historyList">
+            <!-- History will be populated dynamically -->
+          </div>
+        </section>
+
+        <!-- Downloads section -->
+        <section id="section-downloads" class="bp-section">
+          <div class="section-header">
+            <h1 class="section-title">Downloads</h1>
+            <p class="section-subtitle">Your downloaded files</p>
+          </div>
+          <div class="list-container" id="downloadsList">
+            <div class="empty-state">
+              <span class="material-symbols-outlined">folder_open</span>
+              <p>No recent downloads</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- NeBot AI section -->
+        <section id="section-nebot" class="bp-section">
+          <div class="section-header">
+            <h1 class="section-title">NeBot AI Assistant</h1>
+            <p class="section-subtitle">Your AI-powered browsing companion</p>
+          </div>
+          <div class="nebot-launch">
+            <div class="nebot-card" data-focusable tabindex="0" id="launchNebot">
+              <div class="nebot-icon">
+                <span class="material-symbols-outlined">smart_toy</span>
+              </div>
+              <div class="nebot-info">
+                <h3>Start Conversation</h3>
+                <p>Ask questions, get summaries, and more</p>
+              </div>
+              <div class="nebot-action">
+                <span class="key-hint">A</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Settings section -->
+        <section id="section-settings" class="bp-section">
+          <div class="section-header">
+            <h1 class="section-title">Settings</h1>
+            <p class="section-subtitle">Configure your browser</p>
+          </div>
+          <div class="settings-grid">
+            <div class="settings-card" data-focusable tabindex="0" data-action="theme">
+              <span class="material-symbols-outlined">palette</span>
+              <span class="settings-label">Themes</span>
+            </div>
+            <div class="settings-card" data-focusable tabindex="0" data-action="privacy">
+              <span class="material-symbols-outlined">shield</span>
+              <span class="settings-label">Privacy</span>
+            </div>
+            <div class="settings-card" data-focusable tabindex="0" data-action="display">
+              <span class="material-symbols-outlined">display_settings</span>
+              <span class="settings-label">Display</span>
+            </div>
+            <div class="settings-card" data-focusable tabindex="0" data-action="exit-bigpicture">
+              <span class="material-symbols-outlined">desktop_windows</span>
+              <span class="settings-label">Desktop Mode</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- Bottom controller hints -->
+    <footer class="bp-footer">
+      <div class="controller-hints">
+        <div class="hint">
+          <span class="controller-btn dpad">
+            <span class="material-symbols-outlined">gamepad</span>
+          </span>
+          <span>Navigate</span>
+        </div>
+        <div class="hint">
+          <span class="controller-btn a-btn">A</span>
+          <span>Select</span>
+        </div>
+        <div class="hint">
+          <span class="controller-btn b-btn">B</span>
+          <span>Back</span>
+        </div>
+        <div class="hint">
+          <span class="controller-btn y-btn">Y</span>
+          <span>Search</span>
+        </div>
+        <div class="hint">
+          <span class="controller-btn menu-btn">☰</span>
+          <span>Menu</span>
+        </div>
+      </div>
+    </footer>
+
+    <!-- On-screen keyboard (for controller input) -->
+    <div id="osk-overlay" class="osk-overlay hidden">
+      <div class="osk-container">
+        <div class="osk-header">
+          <input type="text" id="osk-input" class="osk-text-input" placeholder="Type with D-pad + A" readonly>
+          <button class="osk-close" data-focusable tabindex="0">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="osk-keyboard" id="osk-keyboard">
+          <!-- Keyboard rows will be generated by JS -->
+        </div>
+        <div class="osk-actions">
+          <button class="osk-action-btn" id="osk-space" data-focusable tabindex="0">
+            <span class="btn-hint">Y</span> Space
+          </button>
+          <button class="osk-action-btn" id="osk-backspace" data-focusable tabindex="0">
+            <span class="btn-hint">X</span>
+            <span class="material-symbols-outlined">backspace</span>
+          </button>
+          <button class="osk-action-btn" id="osk-clear" data-focusable tabindex="0">
+            <span class="btn-hint">LB</span> Clear
+          </button>
+          <button class="osk-action-btn primary" id="osk-submit" data-focusable tabindex="0">
+            <span class="btn-hint">RB</span> Go
+          </button>
+        </div>
+        <div class="osk-hints">
+          <span><b>A</b> Type</span>
+          <span><b>X</b> Backspace</span>
+          <span><b>Y</b> Space</span>
+          <span><b>B</b> Close</span>
+          <span><b>LB</b> Clear All</span>
+          <span><b>RB</b> Submit</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Context menu -->
+    <div id="context-menu" class="context-menu hidden">
+      <button class="context-item" data-action="open" data-focusable tabindex="0">
+        <span class="material-symbols-outlined">open_in_new</span>
+        <span>Open</span>
+      </button>
+      <button class="context-item" data-action="edit" data-focusable tabindex="0">
+        <span class="material-symbols-outlined">edit</span>
+        <span>Edit</span>
+      </button>
+      <button class="context-item" data-action="delete" data-focusable tabindex="0">
+        <span class="material-symbols-outlined">delete</span>
+        <span>Delete</span>
+      </button>
+    </div>
+  </div>
+
+  <script src="bigpicture.js"></script>
+</body>
+</html>

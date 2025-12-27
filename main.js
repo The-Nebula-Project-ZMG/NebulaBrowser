@@ -68,6 +68,143 @@ ipcMain.removeHandler('window-minimize');
 ipcMain.removeHandler('window-maximize');
 ipcMain.removeHandler('window-close');
 
+// =============================================================================
+// BIG PICTURE MODE - Steam Deck / Console UI
+// =============================================================================
+
+// Steam Deck screen dimensions: 1280x800
+const STEAM_DECK_WIDTH = 1280;
+const STEAM_DECK_HEIGHT = 800;
+const HANDHELD_THRESHOLD = 1366; // Consider screens smaller than this as "handheld"
+
+let bigPictureWindow = null;
+
+/**
+ * Check if the current display is likely a Steam Deck or similar handheld
+ */
+function isSteamDeckDisplay() {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.size;
+  
+  // Check for Steam Deck resolution or similar small screens
+  const isSteamDeckRes = width === STEAM_DECK_WIDTH && height === STEAM_DECK_HEIGHT;
+  const isSmallScreen = width <= HANDHELD_THRESHOLD;
+  
+  // Also check for certain aspect ratios common in handhelds (16:10, 16:9)
+  const aspectRatio = width / height;
+  const isHandheldAspect = aspectRatio >= 1.5 && aspectRatio <= 1.8;
+  
+  return isSteamDeckRes || (isSmallScreen && isHandheldAspect);
+}
+
+/**
+ * Get screen info for UI decisions
+ */
+function getScreenInfo() {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.size;
+  const { scaleFactor } = primaryDisplay;
+  
+  return {
+    width,
+    height,
+    scaleFactor,
+    isSteamDeck: width === STEAM_DECK_WIDTH && height === STEAM_DECK_HEIGHT,
+    isSmallScreen: width <= HANDHELD_THRESHOLD,
+    aspectRatio: width / height,
+    suggestBigPicture: isSteamDeckDisplay()
+  };
+}
+
+/**
+ * Create Big Picture Mode window
+ */
+function createBigPictureWindow() {
+  if (bigPictureWindow && !bigPictureWindow.isDestroyed()) {
+    bigPictureWindow.focus();
+    return bigPictureWindow;
+  }
+
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.workAreaSize;
+
+  bigPictureWindow = new BrowserWindow({
+    width: width,
+    height: height,
+    fullscreen: true,
+    frame: false,
+    show: false,
+    backgroundColor: '#0a0a0f',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      webviewTag: true,
+      spellcheck: false,
+      webSecurity: true,
+    },
+    icon: process.platform === 'darwin'
+      ? path.join(__dirname, 'assets/images/Logos/Nebula-Favicon.icns')
+      : path.join(__dirname, 'assets/images/Logos/Nebula-favicon.png'),
+    title: 'Nebula - Big Picture Mode'
+  });
+
+  bigPictureWindow.loadFile('renderer/bigpicture.html');
+
+  bigPictureWindow.once('ready-to-show', () => {
+    bigPictureWindow.show();
+    console.log('[BigPicture] Window ready');
+  });
+
+  bigPictureWindow.on('closed', () => {
+    bigPictureWindow = null;
+    console.log('[BigPicture] Window closed');
+  });
+
+  return bigPictureWindow;
+}
+
+/**
+ * Exit Big Picture Mode and return to desktop UI
+ */
+function exitBigPictureMode() {
+  if (bigPictureWindow && !bigPictureWindow.isDestroyed()) {
+    bigPictureWindow.close();
+    bigPictureWindow = null;
+  }
+  
+  // Ensure main window exists and is focused
+  const windows = BrowserWindow.getAllWindows();
+  const mainWindow = windows.find(w => w !== bigPictureWindow);
+  if (mainWindow) {
+    mainWindow.focus();
+  } else if (windows.length === 0) {
+    createWindow();
+  }
+}
+
+// IPC handlers for Big Picture Mode
+ipcMain.handle('get-screen-info', () => getScreenInfo());
+
+ipcMain.handle('launch-bigpicture', () => {
+  createBigPictureWindow();
+  return { success: true };
+});
+
+ipcMain.handle('exit-bigpicture', () => {
+  exitBigPictureMode();
+  return { success: true };
+});
+
+ipcMain.handle('is-bigpicture-suggested', () => {
+  return isSteamDeckDisplay();
+});
+
+ipcMain.on('exit-bigpicture', () => {
+  exitBigPictureMode();
+});
+
+// =============================================================================
 
 
 function createWindow(startUrl) {

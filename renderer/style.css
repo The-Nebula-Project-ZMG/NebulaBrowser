@@ -291,6 +291,18 @@ body:has(#home-container.active) #downloads-btn {
   background: rgba(255,255,255,0.06);
 }
 
+/* Big Picture Mode button special style */
+#bigpicture-btn {
+  background: linear-gradient(135deg, rgba(123, 46, 255, 0.15) 0%, rgba(0, 198, 255, 0.1) 100%) !important;
+  border: 1px solid rgba(123, 46, 255, 0.3) !important;
+  margin: 4px 0;
+}
+
+#bigpicture-btn:hover {
+  background: linear-gradient(135deg, rgba(123, 46, 255, 0.25) 0%, rgba(0, 198, 255, 0.15) 100%) !important;
+  border-color: rgba(123, 46, 255, 0.5) !important;
+}
+
 .hidden {
   display: none;
 }

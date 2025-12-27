@@ -217,6 +217,35 @@ button:active {
   transform: translateY(1px);
 }
 
+/* Primary button style (e.g., Big Picture Mode) */
+.primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #7B2EFF 0%, #5a1fd4 50%, #00C6FF 100%);
+  background-size: 200% 100%;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(123, 46, 255, 0.3);
+}
+
+.primary-btn:hover {
+  background-position: 100% 0;
+  box-shadow: 0 6px 30px rgba(123, 46, 255, 0.45), 0 0 20px rgba(0, 198, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.primary-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 10px rgba(123, 46, 255, 0.3);
+}
+
 .note {
   font-size: 0.8rem;
   color: #aaa;

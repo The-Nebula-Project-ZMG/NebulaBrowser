@@ -1189,6 +1189,20 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Big Picture Mode button
+  const bigPictureBtn = document.getElementById('bigpicture-btn');
+  if (bigPictureBtn && window.bigPictureAPI && window.bigPictureAPI.launch) {
+    bigPictureBtn.addEventListener('click', async () => {
+      try {
+        await window.bigPictureAPI.launch();
+        // Close the menu popup
+        if (menuPopup) menuPopup.classList.add('hidden');
+      } catch (e) {
+        console.error('Failed to launch Big Picture Mode:', e);
+      }
+    });
+  }
+
   // wire up back/forward buttons
   const backBtn = document.querySelector('.nav-left button:nth-child(1)');
   const forwardBtn = document.querySelector('.nav-left button:nth-child(2)');

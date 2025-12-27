@@ -189,6 +189,49 @@ window.addEventListener('DOMContentLoaded', () => {
       });
     }
   } catch (e) { console.warn('Display scale setup failed', e); }
+
+  // Big Picture Mode controls
+  try {
+    const bigPictureBtn = document.getElementById('launch-bigpicture-btn');
+    const bigPictureStatus = document.getElementById('bigpicture-status');
+    
+    // Check if Big Picture Mode is recommended for this display
+    if (window.bigPictureAPI && typeof window.bigPictureAPI.isSuggested === 'function') {
+      window.bigPictureAPI.isSuggested().then(suggested => {
+        if (suggested && bigPictureStatus) {
+          bigPictureStatus.textContent = '✓ Recommended for your display';
+          bigPictureStatus.style.color = '#4ade80';
+        }
+      }).catch(() => {});
+      
+      // Get screen info for display
+      window.bigPictureAPI.getScreenInfo().then(info => {
+        if (info && bigPictureStatus) {
+          const hint = info.isSteamDeck ? 'Steam Deck detected' : 
+                       info.isSmallScreen ? 'Small screen detected' : '';
+          if (hint && !bigPictureStatus.textContent) {
+            bigPictureStatus.textContent = hint;
+          }
+        }
+      }).catch(() => {});
+    }
+    
+    if (bigPictureBtn) {
+      bigPictureBtn.addEventListener('click', async () => {
+        try {
+          if (window.bigPictureAPI && typeof window.bigPictureAPI.launch === 'function') {
+            showStatus('Launching Big Picture Mode...');
+            await window.bigPictureAPI.launch();
+          } else {
+            showStatus('Big Picture Mode not available');
+          }
+        } catch (e) {
+          console.error('Big Picture Mode launch error:', e);
+          showStatus('Failed to launch Big Picture Mode');
+        }
+      });
+    }
+  } catch (e) { console.warn('Big Picture Mode setup failed', e); }
 });
 
 // Tabs: simple controller

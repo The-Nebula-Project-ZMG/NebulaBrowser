@@ -116,6 +116,20 @@ contextBridge.exposeInMainWorld('aboutAPI', {
   getInfo: () => ipcRenderer.invoke('get-about-info')
 });
 
+// Big Picture Mode API - Steam Deck / Console UI
+contextBridge.exposeInMainWorld('bigPictureAPI', {
+  // Get screen info to determine if Big Picture Mode is recommended
+  getScreenInfo: () => ipcRenderer.invoke('get-screen-info'),
+  // Check if device is likely a Steam Deck or handheld
+  isSuggested: () => ipcRenderer.invoke('is-bigpicture-suggested'),
+  // Launch Big Picture Mode
+  launch: () => ipcRenderer.invoke('launch-bigpicture'),
+  // Exit Big Picture Mode
+  exit: () => ipcRenderer.invoke('exit-bigpicture'),
+  // Navigate to URL (from Big Picture Mode)
+  navigate: (url) => ipcRenderer.send('bigpicture-navigate', url)
+});
+
 // Relay context-menu commands from main to active renderer context (open new tabs etc.)
 ipcRenderer.on('context-menu-command', (event, payload) => {
   window.dispatchEvent(new CustomEvent('nebula-context-command', { detail: payload }));
