@@ -62,17 +62,17 @@ if (process.platform === 'linux') {
     console.log('[GPU] Applying SteamOS-specific GPU flags for webview rendering...');
     
     // Critical flags for SteamOS/Gamescope webview rendering
+    // SteamOS only supports egl-angle, NOT desktop GL
     app.commandLine.appendSwitch('ozone-platform', 'x11');
+    app.commandLine.appendSwitch('use-gl', 'egl');
+    app.commandLine.appendSwitch('use-angle', 'default');
     app.commandLine.appendSwitch('disable-gpu-compositing');
     app.commandLine.appendSwitch('disable-gpu-vsync');
-    app.commandLine.appendSwitch('disable-accelerated-2d-canvas');
-    app.commandLine.appendSwitch('use-gl', 'desktop');
-    app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
-    app.commandLine.appendSwitch('enable-features', 'UseOzonePlatform');
-    app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+    app.commandLine.appendSwitch('disable-software-rasterizer');
+    app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor,UseChromeOSDirectVideoDecoder');
+    app.commandLine.appendSwitch('enable-features', 'UseOzonePlatform,Vulkan');
     
-    // Additional flags that help with AMD GPU under Gamescope
-    app.commandLine.appendSwitch('disable-background-networking');
+    // In-process GPU can help with stability on Steam Deck
     app.commandLine.appendSwitch('in-process-gpu');
   } else {
     console.log('[GPU] Standard Linux environment detected');
@@ -643,9 +643,16 @@ app.whenReady().then(() => {
   });
 
   // --- Auto-Updater Setup ---
-  // Configure auto-updater logging
-  autoUpdater.logger = require('electron-updater').autoUpdater.logger;
-  if (autoUpdater.logger) autoUpdater.logger.transports.file.level = 'info';
+  // Configure auto-updater logging (safely - may not be available in all environments)
+  try {
+    const updaterLogger = require('electron-updater').autoUpdater.logger;
+    if (updaterLogger && updaterLogger.transports && updaterLogger.transports.file) {
+      autoUpdater.logger = updaterLogger;
+      autoUpdater.logger.transports.file.level = 'info';
+    }
+  } catch (e) {
+    console.log('[AutoUpdater] Logger setup skipped:', e.message);
+  }
 
   // Check for updates after a short delay to not block startup
   setTimeout(() => {
