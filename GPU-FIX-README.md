@@ -21,35 +21,27 @@ This is caused by GPU compositing conflicts between Electron's Chromium renderer
 
 ### Solution
 
-**Automatic Detection (v1.3.3+)**
-The latest version of Nebula automatically detects SteamOS/Gamescope and applies the necessary fixes in both development and packaged builds.
+**Option 1: Automatic Detection (Recommended)**
+The latest version of Nebula automatically detects SteamOS/Gamescope and applies the necessary fixes. Simply update to the latest version.
 
-**For AppImage/Packaged Builds:**
-
-If the automatic detection isn't working, you can launch the AppImage with flags:
-
+**Option 2: Manual Launch Script**
+Use the provided `start-steamos.sh` script:
 ```bash
-# Run the AppImage with SteamOS flags
-./Nebula-*.AppImage --ozone-platform=x11 --disable-gpu-compositing --disable-gpu-vsync --no-sandbox --disable-dev-shm-usage --disable-features=VizDisplayCompositor
+chmod +x start-steamos.sh
+./start-steamos.sh
 ```
 
-**Create a custom .desktop file:**
-
-Copy `nebula-steamos.desktop` to `~/.local/share/applications/` for a Steam Deck optimized launcher:
+**Option 3: Command-line Flags**
+If running manually, add these flags:
 ```bash
-cp nebula-steamos.desktop ~/.local/share/applications/
+electron . --ozone-platform=x11 --disable-gpu-compositing --disable-gpu-vsync --no-sandbox --disable-dev-shm-usage
 ```
 
-**For Development:**
+**Option 4: Environment Variable**
+Set the `ELECTRON_OZONE_PLATFORM_HINT` environment variable:
 ```bash
-npm run start:steamos
-```
-
-**Environment Variable Override:**
-You can force SteamOS mode by setting an environment variable:
-```bash
-export SteamDeck=1
-./Nebula-*.AppImage
+export ELECTRON_OZONE_PLATFORM_HINT=x11
+npm start
 ```
 
 ## Linux (General)

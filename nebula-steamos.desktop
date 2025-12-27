@@ -1,9 +1,0 @@
-[Desktop Entry]
-Name=Nebula Browser (SteamOS)
-Comment=Nebula Browser optimized for SteamOS/Steam Deck
-Exec=nebula --ozone-platform=x11 --disable-gpu-compositing --disable-gpu-vsync --no-sandbox --disable-dev-shm-usage --disable-features=VizDisplayCompositor %U
-Icon=nebula
-Type=Application
-Categories=Network;WebBrowser;
-StartupWMClass=nebula
-MimeType=x-scheme-handler/http;x-scheme-handler/https;

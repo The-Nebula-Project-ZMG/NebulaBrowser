@@ -42,25 +42,7 @@
       "icon": "assets/images/Logos/Nebula-Favicon.ico"
     },
     "linux": {
-      "icon": "assets/images/Logos/Nebula-Favicon.png",
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": ["x64"]
-        },
-        {
-          "target": "deb",
-          "arch": ["x64"]
-        }
-      ],
-      "category": "Network",
-      "desktop": {
-        "StartupWMClass": "nebula"
-      },
-      "executableArgs": [
-        "--no-sandbox",
-        "--disable-gpu-sandbox"
-      ]
+      "icon": "assets/images/Logos/Nebula-Favicon.png"
     }
   }
 }
