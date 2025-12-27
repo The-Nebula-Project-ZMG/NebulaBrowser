@@ -5,6 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "start:steamos": "electron . --ozone-platform=x11 --disable-gpu-compositing --disable-gpu-vsync --no-sandbox --disable-dev-shm-usage --disable-features=VizDisplayCompositor",
+    "start:linux-safe": "electron . --disable-gpu --disable-gpu-compositing --no-sandbox",
     "dist": "electron-builder",
     "run": "electron ."
   },

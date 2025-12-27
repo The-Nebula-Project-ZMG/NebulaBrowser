@@ -5,6 +5,36 @@ class GPUConfig {
   constructor() {
     this.isGPUSupported = false;
     this.fallbackApplied = false;
+    this.isSteamOS = false;
+    this.isLinux = process.platform === 'linux';
+  }
+
+  // Detect if running on SteamOS/Steam Deck
+  detectSteamOS() {
+    if (!this.isLinux) return false;
+    
+    try {
+      const fs = require('fs');
+      // Check for SteamOS identifiers
+      if (fs.existsSync('/etc/steamos-release')) return true;
+      if (fs.existsSync('/usr/share/steamos/steamos.conf')) return true;
+      
+      // Check os-release for SteamOS
+      if (fs.existsSync('/etc/os-release')) {
+        const osRelease = fs.readFileSync('/etc/os-release', 'utf8');
+        if (osRelease.includes('SteamOS') || osRelease.includes('steamos')) return true;
+      }
+      
+      // Check if running under Gamescope (Steam Deck's compositor)
+      if (process.env.GAMESCOPE_WAYLAND_DISPLAY || process.env.SteamDeck) return true;
+      
+      // Check for Steam runtime environment
+      if (process.env.STEAM_RUNTIME || process.env.SteamAppId) return true;
+    } catch (err) {
+      console.log('SteamOS detection error:', err.message);
+    }
+    
+    return false;
   }
 
   // Apply GPU configuration based on system capabilities
@@ -15,13 +45,62 @@ class GPUConfig {
     const platform = process.platform;
     const arch = process.arch;
     
-    console.log(`Platform: ${platform}, Architecture: ${arch}`);
+    this.isSteamOS = this.detectSteamOS();
+    
+    console.log(`Platform: ${platform}, Architecture: ${arch}, SteamOS: ${this.isSteamOS}`);
+    
+    // Apply Linux/SteamOS specific configuration FIRST (before app ready)
+    if (this.isLinux) {
+      this.applyLinuxSettings();
+    }
     
     // Start with conservative settings that usually work
     this.applyConservativeSettings();
     
     // Try to enable GPU features progressively
     this.tryEnableGPU();
+  }
+
+  // Linux-specific settings for proper rendering
+  applyLinuxSettings() {
+    console.log('Applying Linux-specific GPU settings...');
+    
+    // Ozone platform selection - critical for rendering on Linux
+    // Check for Wayland vs X11 environment
+    const waylandDisplay = process.env.WAYLAND_DISPLAY;
+    const gamescope = process.env.GAMESCOPE_WAYLAND_DISPLAY;
+    const x11Display = process.env.DISPLAY;
+    
+    if (this.isSteamOS || gamescope) {
+      // SteamOS/Gamescope: Force X11 backend for better compatibility
+      // Gamescope provides X11 compatibility layer that works better with Electron
+      console.log('SteamOS/Gamescope detected - using X11 Ozone backend');
+      app.commandLine.appendSwitch('ozone-platform', 'x11');
+      
+      // Disable GPU compositing issues on Steam Deck AMD GPU
+      app.commandLine.appendSwitch('disable-gpu-compositing');
+      app.commandLine.appendSwitch('disable-gpu-vsync');
+      
+      // Use software rendering for webviews if needed
+      app.commandLine.appendSwitch('disable-accelerated-2d-canvas');
+      
+      // Fix for AMD GPU rendering issues
+      app.commandLine.appendSwitch('use-gl', 'desktop');
+      app.commandLine.appendSwitch('enable-features', 'UseOzonePlatform');
+    } else if (waylandDisplay && !x11Display) {
+      // Pure Wayland environment
+      console.log('Wayland detected - using Wayland Ozone backend');
+      app.commandLine.appendSwitch('ozone-platform', 'wayland');
+      app.commandLine.appendSwitch('enable-features', 'UseOzonePlatform,WaylandWindowDecorations');
+    } else if (x11Display) {
+      // X11 environment
+      console.log('X11 detected - using X11 Ozone backend');
+      app.commandLine.appendSwitch('ozone-platform', 'x11');
+    }
+    
+    // Common Linux fixes
+    app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
+    app.commandLine.appendSwitch('enable-unsafe-swiftshader');
   }
 
   applyConservativeSettings() {
@@ -40,6 +119,12 @@ class GPUConfig {
 
   tryEnableGPU() {
     try {
+      // Skip aggressive GPU features on SteamOS - they conflict with Gamescope
+      if (this.isSteamOS) {
+        console.log('SteamOS detected - skipping aggressive GPU acceleration');
+        return;
+      }
+      
       // GPU acceleration switches
       app.commandLine.appendSwitch('ignore-gpu-blacklist');
       app.commandLine.appendSwitch('ignore-gpu-blocklist');
@@ -50,8 +135,10 @@ class GPUConfig {
       app.commandLine.appendSwitch('enable-accelerated-video-decode');
       app.commandLine.appendSwitch('enable-accelerated-mjpeg-decode');
       
-      // Conservative feature enabling
-      app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
+      // Conservative feature enabling - skip on Linux to avoid conflicts
+      if (!this.isLinux) {
+        app.commandLine.appendSwitch('enable-features', 'VaapiVideoDecoder');
+      }
       
       console.log('GPU acceleration switches applied');
     } catch (err) {
