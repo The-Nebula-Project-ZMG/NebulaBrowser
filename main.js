@@ -200,6 +200,18 @@ function createBigPictureWindow() {
 
   bigPictureWindow.once('ready-to-show', () => {
     bigPictureWindow.show();
+    
+    // Apply saved display scale to big picture window
+    try {
+      const configPath = path.join(app.getPath('userData'), 'localStorage');
+      const dbPath = path.join(configPath, 'leveldb');
+      // Note: localStorage will be applied via CSS in bigpicture.js since it reads from localStorage directly
+      // The IPC handler will apply setZoomFactor when adjustments are made
+      console.log('[BigPicture] Window ready - display scale will be applied from localStorage');
+    } catch (err) {
+      console.warn('[BigPicture] Failed to apply saved display scale on ready:', err);
+    }
+    
     console.log('[BigPicture] Window ready');
   });
 
@@ -789,7 +801,17 @@ ipcMain.on('theme-changed', (event, theme) => {
 // Handle display scale changes
 ipcMain.on('set-display-scale', (event, scale) => {
   console.log('[MAIN] set-display-scale →', scale);
-  // Could be used to persist scale setting or apply to all webviews
+  try {
+    // Get the webcontents from the event (will be bigPictureWindow)
+    const wc = event.sender;
+    if (wc && typeof wc.setZoomFactor === 'function') {
+      const zoomFactor = Math.max(0.5, Math.min(3, scale / 100));
+      wc.setZoomFactor(zoomFactor);
+      console.log(`[MAIN] Applied zoom factor: ${zoomFactor} for scale ${scale}%`);
+    }
+  } catch (err) {
+    console.warn('[MAIN] Failed to apply display scale:', err);
+  }
 });
 
 // Bookmark management

@@ -179,8 +179,63 @@ const state = {
 // INITIALIZATION
 // =============================================================================
 
+function applyDisplayScale(scalePercent, reason = 'unknown') {
+  const numeric = Number(scalePercent);
+  if (!Number.isFinite(numeric)) return;
+
+  const clampedPercent = Math.min(300, Math.max(50, Math.round(numeric)));
+  const zoomFactor = Math.max(0.5, Math.min(3, clampedPercent / 100));
+
+  // Prefer Electron zoom (consistent across Chromium) with CSS fallback.
+  try {
+    if (ipcRenderer && typeof ipcRenderer.invoke === 'function') {
+      ipcRenderer.invoke('set-zoom-factor', zoomFactor).catch(err => {
+        console.warn('[BigPicture] set-zoom-factor failed; falling back to CSS zoom:', err);
+        applyCssZoom(zoomFactor);
+      });
+    } else {
+      applyCssZoom(zoomFactor);
+    }
+    applyCssZoom(zoomFactor);
+    console.log(`[BigPicture] Applied display scale ${clampedPercent}% (zoom=${zoomFactor}) via ${reason}`);
+  } catch (err) {
+    console.warn('[BigPicture] Failed applying display scale:', err);
+  }
+}
+
+function applyCssZoom(factor) {
+  try {
+    document.documentElement.style.zoom = factor;
+  } catch {}
+  try {
+    document.body.style.zoom = factor;
+  } catch {}
+  try {
+    document.documentElement.style.setProperty('--bp-scale-factor', factor);
+    document.body.style.setProperty('--bp-scale-factor', factor);
+  } catch {}
+}
+
+function applyDisplayScaleFromStorage(reason = 'startup') {
+  try {
+    const savedScale = localStorage.getItem(DISPLAY_SCALE_KEY);
+    if (!savedScale) return;
+    const parsed = parseInt(savedScale, 10);
+    if (Number.isFinite(parsed)) {
+      currentDisplayScale = Math.min(300, Math.max(50, parsed));
+      applyDisplayScale(currentDisplayScale, `${reason}-storage`);
+      updateScaleDisplay();
+    }
+  } catch (err) {
+    console.warn('[BigPicture] Failed to read display scale from storage:', err);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   console.log('[BigPicture] Initializing Big Picture Mode');
+
+  // Apply saved display scale as early as possible for this window.
+  applyDisplayScaleFromStorage('DOMContentLoaded');
   
   initClock();
   initNavigation();
@@ -1959,8 +2014,12 @@ function loadSavedSettings() {
   try {
     const savedScale = localStorage.getItem(DISPLAY_SCALE_KEY);
     if (savedScale) {
-      currentDisplayScale = parseInt(savedScale, 10);
-      updateScaleDisplay();
+      const parsed = parseInt(savedScale, 10);
+      if (Number.isFinite(parsed)) {
+        currentDisplayScale = Math.min(300, Math.max(50, parsed));
+        updateScaleDisplay();
+        applyDisplayScale(currentDisplayScale, 'loadSavedSettings');
+      }
     }
   } catch (err) {
     console.warn('[BigPicture] Failed to load display scale:', err);
@@ -2105,6 +2164,7 @@ function initDisplayScaleControls() {
   }
   
   updateScaleDisplay();
+  applyDisplayScale(currentDisplayScale, 'initDisplayScaleControls');
 }
 
 function adjustDisplayScale(delta) {
@@ -2128,9 +2188,12 @@ function updateScaleDisplay() {
 function saveDisplayScale() {
   try {
     localStorage.setItem(DISPLAY_SCALE_KEY, currentDisplayScale.toString());
-    
-    // Notify main process to update zoom level
-    if (ipcRenderer && ipcRenderer.send) {
+
+    // Apply zoom immediately to Big Picture UI.
+    applyDisplayScale(currentDisplayScale, 'saveDisplayScale');
+
+    // Notify main process (legacy channel) for compatibility.
+    if (ipcRenderer && typeof ipcRenderer.send === 'function') {
       ipcRenderer.send('set-display-scale', currentDisplayScale);
     }
   } catch (err) {
