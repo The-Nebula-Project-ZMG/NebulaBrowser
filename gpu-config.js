@@ -1,6 +1,12 @@
 // gpu-config.js - Comprehensive GPU configuration manager
 const { app } = require('electron');
 
+function envTruthy(value) {
+  if (value === undefined || value === null) return false;
+  const normalized = String(value).trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
 class GPUConfig {
   constructor() {
     this.isGPUSupported = false;
@@ -20,13 +26,21 @@ class GPUConfig {
     // Start with conservative settings that usually work
     this.applyConservativeSettings();
 
-    // On Linux/SteamOS, force disable GPU and sandbox to ensure webview stability
     if (platform === 'linux') {
-      console.log('Linux detected: Disabling GPU and enforcing no-sandbox');
-      app.commandLine.appendSwitch('disable-gpu');
-      app.commandLine.appendSwitch('no-sandbox');
-      this.fallbackApplied = true;
-      return;
+      const env = process.env;
+      const profile = String(env.NEBULA_GPU_PROFILE || '').toLowerCase();
+      const forcedSoftware = envTruthy(env.NEBULA_GPU_FORCE_SOFTWARE) || profile === 'software';
+      const optInRequested = envTruthy(env.NEBULA_GPU_TWEAKS) || envTruthy(env.NEBULA_GPU_ALLOW_LINUX) || envTruthy(env.NEBULA_GPU_FORCE_GPU) || (profile && profile !== 'software') || Boolean(env.NEBULA_GPU_GL) || Boolean(env.NEBULA_GPU_EXTRA_ARGS);
+
+      if (forcedSoftware || !optInRequested) {
+        console.log('Linux detected: Disabling GPU (no opt-in overrides present) and enforcing no-sandbox');
+        app.commandLine.appendSwitch('disable-gpu');
+        app.commandLine.appendSwitch('no-sandbox');
+        this.fallbackApplied = true;
+        return;
+      }
+
+      console.log('Linux GPU opt-in detected: leaving GPU acceleration enabled for this session');
     }
     
     // Try to enable GPU features progressively
