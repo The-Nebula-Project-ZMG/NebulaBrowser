@@ -594,34 +594,93 @@ function goForward() {
 // =============================================================================
 
 function initGamepadSupport() {
+  if (!navigator.getGamepads) {
+    console.warn('[BigPicture] Gamepad API not available in this environment');
+    return;
+  }
+
+  // Note: On Linux (and some controllers like handheld integrated gamepads),
+  // the `gamepadconnected` event may not fire until the first button press,
+  // or at all. We rely on continuous polling for robustness.
   window.addEventListener('gamepadconnected', (e) => {
-    console.log('[BigPicture] Gamepad connected:', e.gamepad.id);
-    state.gamepadConnected = true;
-    state.gamepadIndex = e.gamepad.index;
-    showToast('Controller connected');
+    console.log('[BigPicture] Gamepad connected:', e.gamepad?.id || 'unknown');
+    // Prefer the first connected controller as the active one.
+    if (state.gamepadIndex === null) {
+      state.gamepadConnected = true;
+      state.gamepadIndex = e.gamepad.index;
+      showToast('Controller connected');
+    }
   });
-  
+
   window.addEventListener('gamepaddisconnected', (e) => {
-    console.log('[BigPicture] Gamepad disconnected');
-    state.gamepadConnected = false;
-    state.gamepadIndex = null;
-    showToast('Controller disconnected');
+    console.log('[BigPicture] Gamepad disconnected:', e.gamepad?.id || 'unknown');
+    // If the active controller disconnected, clear it; polling will auto-select another.
+    if (state.gamepadIndex === e.gamepad.index) {
+      state.gamepadConnected = false;
+      state.gamepadIndex = null;
+      showToast('Controller disconnected');
+    }
   });
-  
+
+  // Initial scan (covers controllers that are already connected at load).
+  refreshActiveGamepad(true);
+
   // Start polling for gamepad input
   requestAnimationFrame(pollGamepad);
 }
 
-function pollGamepad() {
-  if (state.gamepadConnected && state.gamepadIndex !== null) {
-    const gamepads = navigator.getGamepads();
-    const gamepad = gamepads[state.gamepadIndex];
-    
-    if (gamepad) {
-      handleGamepadInput(gamepad);
-    }
+function getFirstConnectedGamepad(gamepads) {
+  if (!gamepads) return null;
+  for (let i = 0; i < gamepads.length; i++) {
+    const gp = gamepads[i];
+    if (gp) return gp;
   }
-  
+  return null;
+}
+
+function refreshActiveGamepad(isInitial = false) {
+  const gamepads = navigator.getGamepads();
+
+  // If we have an index, verify it still points to a real gamepad.
+  let active = null;
+  if (state.gamepadIndex !== null) {
+    active = gamepads[state.gamepadIndex] || null;
+  }
+
+  // Fallback: pick the first connected controller.
+  if (!active) {
+    active = getFirstConnectedGamepad(gamepads);
+  }
+
+  if (active) {
+    const changed = !state.gamepadConnected || state.gamepadIndex !== active.index;
+    state.gamepadConnected = true;
+    state.gamepadIndex = active.index;
+    if (changed && !isInitial) {
+      console.log('[BigPicture] Active gamepad selected:', active.id);
+      showToast('Controller connected');
+    }
+  } else {
+    if (state.gamepadConnected) {
+      state.gamepadConnected = false;
+      state.gamepadIndex = null;
+      if (!isInitial) {
+        showToast('Controller disconnected');
+      }
+    }
+    state.gamepadConnected = false;
+    state.gamepadIndex = null;
+  }
+
+  return { gamepads, active };
+}
+
+function pollGamepad() {
+  const { active } = refreshActiveGamepad(false);
+  if (active) {
+    handleGamepadInput(active);
+  }
+
   requestAnimationFrame(pollGamepad);
 }
 
