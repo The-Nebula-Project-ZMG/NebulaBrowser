@@ -72,6 +72,53 @@ ipcMain.removeHandler('window-close');
 // BIG PICTURE MODE - Steam Deck / Console UI
 // =============================================================================
 
+function envTruthy(value) {
+  if (value === undefined || value === null) return false;
+  const s = String(value).trim().toLowerCase();
+  return s === '1' || s === 'true' || s === 'yes' || s === 'on';
+}
+
+function argvHasFlag(flag) {
+  return process.argv.includes(flag);
+}
+
+/**
+ * Heuristic: detect Steam Deck / SteamOS Gaming Mode (gamescope) launches.
+ *
+ * This is intentionally conservative and only used for picking the *default*
+ * startup UI. Users can override via CLI/env.
+ */
+function isGameModeEnvironment() {
+  const env = process.env;
+
+  // Common Steam tenfoot / gamepad UI markers
+  if (envTruthy(env.STEAM_GAMEPADUI)) return true;
+  if (envTruthy(env.SteamTenfoot)) return true;
+  if (envTruthy(env.STEAM_TENFOOT)) return true;
+
+  // SteamOS / gamescope compositor markers
+  const currentDesktop = String(env.XDG_CURRENT_DESKTOP || '').toLowerCase();
+  const sessionDesktop = String(env.XDG_SESSION_DESKTOP || '').toLowerCase();
+  if (currentDesktop.includes('gamescope') || sessionDesktop.includes('gamescope')) return true;
+
+  if (env.GAMESCOPE_WSI || env.GAMESCOPE_SESSION || env.GAMESCOPE_FOCUSED_APP) return true;
+
+  return false;
+}
+
+function shouldStartInBigPictureMode() {
+  // Explicit CLI overrides first
+  if (argvHasFlag('--no-big-picture') || argvHasFlag('--no-bigpicture')) return false;
+  if (argvHasFlag('--big-picture') || argvHasFlag('--bigpicture') || argvHasFlag('--tenfoot') || argvHasFlag('--game-mode')) return true;
+
+  // Explicit env overrides
+  if (envTruthy(process.env.NEBULA_NO_BIG_PICTURE) || envTruthy(process.env.NEBULA_NO_BIGPICTURE)) return false;
+  if (envTruthy(process.env.NEBULA_BIG_PICTURE) || envTruthy(process.env.NEBULA_BIGPICTURE) || envTruthy(process.env.NEBULA_GAME_MODE)) return true;
+
+  // Auto-detect SteamOS Gaming Mode
+  return isGameModeEnvironment();
+}
+
 // Steam Deck screen dimensions: 1280x800
 const STEAM_DECK_WIDTH = 1280;
 const STEAM_DECK_HEIGHT = 800;
@@ -503,7 +550,17 @@ function configureSessionsAsync() {
 
 app.whenReady().then(() => {
   const t0 = performance.now();
-  createWindow();
+
+  // If launched via SteamOS Gaming Mode / gamepad UI, default to Big Picture Mode.
+  // Desktop launches remain unchanged.
+  const startInBigPicture = shouldStartInBigPictureMode();
+  if (startInBigPicture) {
+    console.log('[Startup] Detected game mode launch; starting in Big Picture Mode');
+    createBigPictureWindow();
+  } else {
+    createWindow();
+  }
+
   // Initialize user plugins after app ready
   try {
     pluginManager.ensureUserPluginsDir();
@@ -512,7 +569,7 @@ app.whenReady().then(() => {
   } catch (e) {
     console.error('[Plugins] initialization error:', e);
   }
-  console.log('[Startup] createWindow invoked in', (performance.now() - t0).toFixed(1), 'ms after app.whenReady');
+  console.log('[Startup] initial window created (', startInBigPicture ? 'bigpicture' : 'desktop', ') in', (performance.now() - t0).toFixed(1), 'ms after app.whenReady');
 
   // Handle GPU process crashes (still register early)
   app.on('gpu-process-crashed', (event, killed) => {

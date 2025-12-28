@@ -42,6 +42,14 @@ Nebula Browser includes a **Big Picture Mode** - a controller-friendly, console-
 ### Automatic Detection
 If Nebula detects a Steam Deck-sized display (1280x800), it will suggest Big Picture Mode in settings.
 
+### Auto-start in SteamOS Gaming Mode
+When Nebula is launched from SteamOS **Gaming Mode** (gamescope / Steam gamepad UI), it will automatically start in **Big Picture Mode**.
+
+You can override this behavior:
+- Force Big Picture at launch: launch options `--big-picture` (or `--bigpicture`)
+- Disable Big Picture auto-start: launch options `--no-big-picture` (or `--no-bigpicture`)
+- Environment overrides: `NEBULA_BIG_PICTURE=1` / `NEBULA_NO_BIG_PICTURE=1`
+
 ## Navigation Sections
 
 | Section | Description |

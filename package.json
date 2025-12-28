@@ -5,6 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "start:dev": "electron . --no-sandbox --disable-gpu",
+    "start:linux": "electron . --no-sandbox",
     "dist": "electron-builder",
     "run": "electron ."
   },

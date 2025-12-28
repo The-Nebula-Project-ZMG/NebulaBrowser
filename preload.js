@@ -1,5 +1,11 @@
 // preload.js - Optimized version
 const { contextBridge, ipcRenderer } = require('electron');
+let pathModule;
+try {
+  pathModule = require('path');
+} catch (err) {
+  pathModule = null;
+}
 
 // Cache DOM references for performance
 let domReady = false;
@@ -74,6 +80,27 @@ const electronAPI = {
   saveImageToDisk: async (suggestedName, dataUrl) => ipcRenderer.invoke('save-image-from-dataurl', { suggestedName, dataUrl }),
   saveImageFromNet: async (url) => ipcRenderer.invoke('save-image-from-url', { url })
 };
+
+// Provide absolute path to the renderer preload for webview guests so
+// webview `preload` attributes use an absolute, resolvable path on all platforms.
+const webviewPreloadAbsolutePath = pathModule ? pathModule.join(__dirname, 'preload.js') : null;
+electronAPI.getWebviewPreloadPath = () => webviewPreloadAbsolutePath;
+
+// Fixup any static <webview preload="..."> attributes in the DOM early so
+// guests receive an absolute path instead of a relative one that may fail
+// to resolve inside the guest process.
+window.addEventListener('DOMContentLoaded', () => {
+  try {
+    if (webviewPreloadAbsolutePath) {
+      const els = document.querySelectorAll('webview[preload]');
+      for (const el of els) {
+        try { el.setAttribute('preload', webviewPreloadAbsolutePath); } catch {};
+      }
+    }
+  } catch (e) {
+    // non-fatal
+  }
+});
 
 // Cache for bookmarks to reduce IPC calls
 let bookmarksCache = null;

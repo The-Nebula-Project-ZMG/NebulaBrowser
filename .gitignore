@@ -86,3 +86,27 @@ typings/
 site-history.json
 bookmarks.json
 bookmarks.backup.json
+
+# AppImage / SteamOS
+squashfs-root/
+*.AppImage
+
+# Electron build output
+dist/
+build/
+out/
+release/
+
+# Native binaries
+nebula
+nebula.exe
+
+# Node/Electron
+node_modules/
+
+# Logs
+*.log
+
+# Build artifacts
+nebula-appdir/
+*.asar

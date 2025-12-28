@@ -19,6 +19,15 @@ class GPUConfig {
     
     // Start with conservative settings that usually work
     this.applyConservativeSettings();
+
+    // On Linux/SteamOS, force disable GPU and sandbox to ensure webview stability
+    if (platform === 'linux') {
+      console.log('Linux detected: Disabling GPU and enforcing no-sandbox');
+      app.commandLine.appendSwitch('disable-gpu');
+      app.commandLine.appendSwitch('no-sandbox');
+      this.fallbackApplied = true;
+      return;
+    }
     
     // Try to enable GPU features progressively
     this.tryEnableGPU();
@@ -43,8 +52,13 @@ class GPUConfig {
       // GPU acceleration switches
       app.commandLine.appendSwitch('ignore-gpu-blacklist');
       app.commandLine.appendSwitch('ignore-gpu-blocklist');
-      app.commandLine.appendSwitch('enable-gpu-rasterization');
-      app.commandLine.appendSwitch('enable-zero-copy');
+
+      // On Linux/SteamOS, these aggressive flags can cause webview rendering issues (black screen)
+      // We disable them for Linux to ensure stability
+      if (process.platform !== 'linux') {
+        app.commandLine.appendSwitch('enable-gpu-rasterization');
+        app.commandLine.appendSwitch('enable-zero-copy');
+      }
       
       // Video acceleration (usually safer than full GPU)
       app.commandLine.appendSwitch('enable-accelerated-video-decode');

@@ -368,7 +368,16 @@ function createTab(inputUrl) {
   webview.src = resolvedUrl;
   webview.setAttribute('allowpopups', '');
   webview.setAttribute('partition', 'persist:main');
-  webview.setAttribute('preload', '../preload.js');
+  // Use absolute preload path provided by the main-window preload to ensure
+  // the guest process can resolve the file (important on Linux/SteamOS).
+  try {
+    const preloadPath = (window.electronAPI && typeof window.electronAPI.getWebviewPreloadPath === 'function')
+      ? window.electronAPI.getWebviewPreloadPath()
+      : '../preload.js';
+    webview.setAttribute('preload', preloadPath);
+  } catch (e) {
+    webview.setAttribute('preload', '../preload.js');
+  }
   // Add attributes needed for Google OAuth and sign-in flows
   webview.setAttribute('webpreferences', 'allowRunningInsecureContent=false,javascript=true,webSecurity=true');
   try {
@@ -667,7 +676,14 @@ function convertHomeTabToWebview(tabId, inputUrl, resolvedUrl) {
   webview.src = resolvedUrl;
   webview.setAttribute('allowpopups', '');
   webview.setAttribute('partition', 'persist:main');
-  webview.setAttribute('preload', '../preload.js');
+  try {
+    const preloadPath = (window.electronAPI && typeof window.electronAPI.getWebviewPreloadPath === 'function')
+      ? window.electronAPI.getWebviewPreloadPath()
+      : '../preload.js';
+    webview.setAttribute('preload', preloadPath);
+  } catch (e) {
+    webview.setAttribute('preload', '../preload.js');
+  }
   // Add attributes needed for Google OAuth and sign-in flows
   webview.setAttribute('webpreferences', 'allowRunningInsecureContent=false,javascript=true,webSecurity=true');
   try {
