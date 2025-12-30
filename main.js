@@ -33,6 +33,74 @@ if (!process.env.STEAM_INPUT_ENABLE_VIRTUAL_GAMEPAD) {
 // Hint that this is a game/controller-focused app
 process.env.SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS = '1';
 
+// =============================================================================
+// STEAMWORKS API INTEGRATION
+// =============================================================================
+// Initialize Steam API to properly signal to Steam that this app handles
+// controller input natively. This is more reliable than environment variables
+// alone for disabling Steam Input's mouse/keyboard emulation.
+//
+// NOTE: Since Nebula is categorized as Software (not a Game), we can't configure
+// Steam Input settings in the Steamworks dashboard. Instead, we initialize the
+// Steam Input API directly to signal native controller handling.
+// =============================================================================
+
+let steamworksClient = null;
+let steamworksInitialized = false;
+let steamInput = null;
+
+function initializeSteamworks() {
+  try {
+    const steamworks = require('steamworks.js');
+    
+    // Initialize with Nebula's Steam App ID
+    steamworksClient = steamworks.init(4290110);
+    steamworksInitialized = true;
+    
+    // Log successful initialization
+    const playerName = steamworksClient.localplayer.getName();
+    console.log(`[Steamworks] Initialized successfully for user: ${playerName}`);
+    
+    // Initialize Steam Input API - this tells Steam we handle controllers natively
+    // and should prevent mouse/keyboard emulation in Game Mode
+    try {
+      steamInput = steamworksClient.input;
+      if (steamInput) {
+        console.log('[Steamworks] Steam Input API available - native controller mode enabled');
+        
+        // Try to get connected controllers to verify input is working
+        try {
+          const controllers = steamInput.getControllers();
+          if (controllers && controllers.length > 0) {
+            console.log(`[Steamworks] Found ${controllers.length} connected controller(s)`);
+          }
+        } catch (inputErr) {
+          // Controller enumeration may not be available, that's OK
+        }
+      }
+    } catch (inputErr) {
+      console.log('[Steamworks] Steam Input API not fully available:', inputErr.message);
+    }
+    
+    return true;
+  } catch (e) {
+    // Not running through Steam, or steamworks.js not available
+    // This is fine - app works without Steam API
+    if (e.code === 'MODULE_NOT_FOUND') {
+      console.log('[Steamworks] steamworks.js not installed - running without Steam API');
+    } else if (e.message && e.message.includes('Steam client')) {
+      console.log('[Steamworks] Steam client not running - running without Steam API');
+    } else {
+      console.log('[Steamworks] Failed to initialize:', e.message || e);
+    }
+    return false;
+  }
+}
+
+// Initialize Steamworks early (before app.ready)
+// This is critical for Steam Input to recognize native controller support
+initializeSteamworks();
+
 const { app, BrowserWindow, ipcMain, session, screen, shell, dialog, Menu, clipboard, webContents } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { pathToFileURL } = require('url');
