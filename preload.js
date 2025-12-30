@@ -160,18 +160,6 @@ contextBridge.exposeInMainWorld('bigPictureAPI', {
     ipcRenderer.invoke('webview-send-input-event', { webContentsId, inputEvent })
 });
 
-contextBridge.exposeInMainWorld('steamInputAPI', {
-  start: () => ipcRenderer.invoke('steam-input-start'),
-  stop: () => ipcRenderer.send('steam-input-stop'),
-  getStatus: () => ipcRenderer.invoke('steam-input-status'),
-  onState: (handler) => {
-    if (typeof handler !== 'function') return () => {};
-    const wrapped = (_event, payload) => handler(payload);
-    ipcRenderer.on('steam-input-state', wrapped);
-    return () => ipcRenderer.removeListener('steam-input-state', wrapped);
-  }
-});
-
 // Relay context-menu commands from main to active renderer context (open new tabs etc.)
 ipcRenderer.on('context-menu-command', (event, payload) => {
   window.dispatchEvent(new CustomEvent('nebula-context-command', { detail: payload }));

@@ -9,14 +9,12 @@ const PerformanceMonitor = require('./performance-monitor');
 const GPUFallback = require('./gpu-fallback');
 const GPUConfig = require('./gpu-config');
 const PluginManager = require('./plugin-manager');
-const SteamInputManager = require('./steam-input-manager');
 
 // Initialize performance monitoring and GPU management
 const perfMonitor = new PerformanceMonitor();
 const gpuFallback = new GPUFallback();
 const gpuConfig = new GPUConfig();
 const pluginManager = new PluginManager();
-const steamInputManager = new SteamInputManager();
 
 // Try to enable WebAuthn/platform authenticator features early.
 // This helps Chromium expose platform authenticators (Touch ID / built-in) where supported.
@@ -263,19 +261,6 @@ ipcMain.handle('is-bigpicture-suggested', () => {
 
 ipcMain.on('exit-bigpicture', () => {
   exitBigPictureMode();
-});
-
-// Steam Input bridge
-ipcMain.handle('steam-input-start', (event) => {
-  return steamInputManager.subscribe(event.sender);
-});
-
-ipcMain.on('steam-input-stop', (event) => {
-  steamInputManager.unsubscribe(event.sender);
-});
-
-ipcMain.handle('steam-input-status', () => {
-  return steamInputManager.getStatus();
 });
 
 // IPC handler for sending mouse input events to webviews (used by Big Picture Mode)
@@ -689,14 +674,6 @@ app.whenReady().then(() => {
 // Quit when all windows are closed.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
-});
-
-app.on('before-quit', () => {
-  try {
-    steamInputManager?.dispose?.();
-  } catch (err) {
-    console.warn('[SteamInput] dispose failed:', err);
-  }
 });
 
 // ipcMain handlers

@@ -144,13 +144,8 @@ const state = {
   // Gamepad
   gamepadConnected: false,
   gamepadIndex: null,
-  lastInput: {},
+  lastInput: { x: 0, y: 0 },
   inputRepeatTimer: null,
-  legacyGamepadEnabled: false,
-  useSteamInput: false,
-  steamInputStatus: null,
-  steamInputUnsubscribe: null,
-  steamInputCleanupBound: false,
   
   // Virtual cursor for webview
   cursorEnabled: false,
@@ -653,62 +648,11 @@ function goForward() {
 // GAMEPAD SUPPORT
 // =============================================================================
 
-function processDirectionalInput(direction, isPressed) {
-  const now = Date.now();
-  if (isPressed && !state.lastInput[direction]) {
-    navigateFocus(direction);
-    state.lastInput[direction] = now;
-  } else if (!isPressed) {
-    state.lastInput[direction] = 0;
-  }
-}
-
-function processButtonInput(key, pressed, handler) {
-  if (pressed && !state.lastInput[key]) {
-    handler();
-    state.lastInput[key] = true;
-  } else if (!pressed) {
-    state.lastInput[key] = false;
-  }
-}
-
-function handleCursorSpeedToggle() {
-  state.cursorSpeed = state.cursorSpeed === 15 ? 8 : (state.cursorSpeed === 8 ? 25 : 15);
-  showToast(`Cursor speed: ${state.cursorSpeed === 8 ? 'Slow' : state.cursorSpeed === 15 ? 'Normal' : 'Fast'}`);
-}
-
-async function initGamepadSupport() {
-  if (window.steamInputAPI) {
-    try {
-      const status = await window.steamInputAPI.start();
-      state.steamInputStatus = status;
-      if (status?.enabled) {
-        state.useSteamInput = true;
-        if (!state.steamInputCleanupBound) {
-          window.addEventListener('beforeunload', cleanupSteamInput);
-          state.steamInputCleanupBound = true;
-        }
-        state.steamInputUnsubscribe = window.steamInputAPI.onState(handleSteamInputState);
-        console.log('[BigPicture] Steam Input enabled via steamworks.js');
-        return;
-      }
-      console.log('[BigPicture] Steam Input unavailable, falling back:', status?.reason);
-    } catch (err) {
-      console.warn('[BigPicture] Failed to initialize Steam Input:', err);
-    }
-  }
-
-  initLegacyGamepadSupport();
-}
-
-function initLegacyGamepadSupport() {
-  if (state.legacyGamepadEnabled) return;
+function initGamepadSupport() {
   if (!navigator.getGamepads) {
     console.warn('[BigPicture] Gamepad API not available in this environment');
     return;
   }
-
-  state.legacyGamepadEnabled = true;
 
   // Note: On Linux (and some controllers like handheld integrated gamepads),
   // the `gamepadconnected` event may not fire until the first button press,
@@ -787,10 +731,6 @@ function refreshActiveGamepad(isInitial = false) {
 }
 
 function pollGamepad() {
-  if (!state.legacyGamepadEnabled || state.useSteamInput) {
-    requestAnimationFrame(pollGamepad);
-    return;
-  }
   const { active } = refreshActiveGamepad(false);
   if (active) {
     handleGamepadInput(active);
@@ -800,11 +740,9 @@ function pollGamepad() {
 }
 
 function handleGamepadInput(gamepad) {
-  if (state.useSteamInput) return;
-
   // D-pad and left stick for navigation
-  const leftX = gamepad.axes[0] || 0;
-  const leftY = gamepad.axes[1] || 0;
+  const leftX = gamepad.axes[0];
+  const leftY = gamepad.axes[1];
   
   // D-pad buttons (indices may vary by controller)
   const dpadUp = gamepad.buttons[12]?.pressed;
@@ -818,49 +756,122 @@ function handleGamepadInput(gamepad) {
   const stickLeft = leftX < -CONFIG.STICK_DEADZONE;
   const stickRight = leftX > CONFIG.STICK_DEADZONE;
   
+  // When cursor is enabled (viewing a webpage), only D-Pad navigates sidebar
+  // Left stick is ignored for UI navigation in webview mode
   const inWebviewMode = state.cursorEnabled && state.currentWebview;
+  
+  // Combine inputs - but only use D-Pad when in webview mode
   const up = inWebviewMode ? dpadUp : (dpadUp || stickUp);
   const down = inWebviewMode ? dpadDown : (dpadDown || stickDown);
   const left = inWebviewMode ? dpadLeft : (dpadLeft || stickLeft);
   const right = inWebviewMode ? dpadRight : (dpadRight || stickRight);
-
-  processDirectionalInput('up', up);
-  processDirectionalInput('down', down);
-  processDirectionalInput('left', left);
-  processDirectionalInput('right', right);
-
-  processButtonInput('a', gamepad.buttons[0]?.pressed, activateFocused);
-  processButtonInput('b', gamepad.buttons[1]?.pressed, () => goBack());
-  processButtonInput('x', gamepad.buttons[2]?.pressed, () => {
-    if (state.oskVisible) backspaceOSK();
-  });
-  processButtonInput('y', gamepad.buttons[3]?.pressed, () => {
+  
+  // Navigation with repeat prevention
+  const now = Date.now();
+  
+  if (up && !state.lastInput.up) {
+    navigateFocus('up');
+    state.lastInput.up = now;
+  } else if (!up) {
+    state.lastInput.up = 0;
+  }
+  
+  if (down && !state.lastInput.down) {
+    navigateFocus('down');
+    state.lastInput.down = now;
+  } else if (!down) {
+    state.lastInput.down = 0;
+  }
+  
+  if (left && !state.lastInput.left) {
+    navigateFocus('left');
+    state.lastInput.left = now;
+  } else if (!left) {
+    state.lastInput.left = 0;
+  }
+  
+  if (right && !state.lastInput.right) {
+    navigateFocus('right');
+    state.lastInput.right = now;
+  } else if (!right) {
+    state.lastInput.right = 0;
+  }
+  
+  // A button (usually index 0) - Always select/activate focused menu item
+  if (gamepad.buttons[0]?.pressed && !state.lastInput.a) {
+    activateFocused();
+    state.lastInput.a = true;
+  } else if (!gamepad.buttons[0]?.pressed) {
+    state.lastInput.a = false;
+  }
+  
+  // B button (usually index 1) - Back/Close OSK
+  if (gamepad.buttons[1]?.pressed && !state.lastInput.b) {
+    goBack();
+    state.lastInput.b = true;
+  } else if (!gamepad.buttons[1]?.pressed) {
+    state.lastInput.b = false;
+  }
+  
+  // X button (usually index 2) - Backspace when OSK is open
+  if (gamepad.buttons[2]?.pressed && !state.lastInput.x) {
+    if (state.oskVisible) {
+      backspaceOSK();
+    }
+    state.lastInput.x = true;
+  } else if (!gamepad.buttons[2]?.pressed) {
+    state.lastInput.x = false;
+  }
+  
+  // Y button (usually index 3) - Space when OSK open, otherwise open search
+  if (gamepad.buttons[3]?.pressed && !state.lastInput.y) {
     if (state.oskVisible) {
       appendToOSK(' ');
     } else {
       openOSK('search');
     }
-  });
-  processButtonInput('lb', gamepad.buttons[4]?.pressed, () => {
+    state.lastInput.y = true;
+  } else if (!gamepad.buttons[3]?.pressed) {
+    state.lastInput.y = false;
+  }
+  
+  // LB button (usually index 4) - Go back in webview / clear OSK
+  if (gamepad.buttons[4]?.pressed && !state.lastInput.lb) {
     if (state.oskVisible) {
       clearOSK();
     } else if (state.currentSection === 'browse' && state.currentWebview) {
       goBack();
     }
-  });
-  processButtonInput('rb', gamepad.buttons[5]?.pressed, () => {
+    state.lastInput.lb = true;
+  } else if (!gamepad.buttons[4]?.pressed) {
+    state.lastInput.lb = false;
+  }
+  
+  // RB button (usually index 5) - Go forward in webview / submit OSK
+  if (gamepad.buttons[5]?.pressed && !state.lastInput.rb) {
     if (state.oskVisible) {
       submitOSK();
     } else if (state.currentSection === 'browse' && state.currentWebview) {
       goForward();
     }
-  });
-  processButtonInput('select', gamepad.buttons[8]?.pressed, () => {
+    state.lastInput.rb = true;
+  } else if (!gamepad.buttons[5]?.pressed) {
+    state.lastInput.rb = false;
+  }
+  
+  // Back/Select button (usually index 8) - Toggle sidebar when in webview
+  if (gamepad.buttons[8]?.pressed && !state.lastInput.select) {
     if (state.currentSection === 'browse' && state.currentWebview) {
       toggleSidebar();
     }
-  });
-  processButtonInput('start', gamepad.buttons[9]?.pressed, () => {
+    state.lastInput.select = true;
+  } else if (!gamepad.buttons[8]?.pressed) {
+    state.lastInput.select = false;
+  }
+  
+  // Start button (usually index 9) - Menu / Toggle sidebar when viewing webpage
+  if (gamepad.buttons[9]?.pressed && !state.lastInput.start) {
+    // If viewing a webpage, toggle sidebar instead of going to settings
     if (state.currentSection === 'browse' && state.currentWebview) {
       toggleSidebar();
     } else if (state.currentSection !== 'settings') {
@@ -868,138 +879,60 @@ function handleGamepadInput(gamepad) {
     } else {
       switchSection('home');
     }
-  });
-
+    state.lastInput.start = true;
+  } else if (!gamepad.buttons[9]?.pressed) {
+    state.lastInput.start = false;
+  }
+  
+  // Virtual cursor handling when webview is active
   if (state.cursorEnabled && state.currentWebview) {
+    // Right stick for cursor movement
     const rightX = gamepad.axes[2] || 0;
     const rightY = gamepad.axes[3] || 0;
+    
+    // Apply deadzone
     const deadzone = 0.15;
     const moveX = Math.abs(rightX) > deadzone ? rightX : 0;
     const moveY = Math.abs(rightY) > deadzone ? rightY : 0;
+    
     if (moveX !== 0 || moveY !== 0) {
       moveCursor(moveX * state.cursorSpeed, moveY * state.cursorSpeed);
     }
-
+    
+    // Left stick for scrolling in webview mode
     const scrollDeadzone = 0.25;
     const scrollX = Math.abs(leftX) > scrollDeadzone ? leftX : 0;
     const scrollY = Math.abs(leftY) > scrollDeadzone ? leftY : 0;
+    
     if (scrollX !== 0 || scrollY !== 0) {
       scrollWebview(scrollY * 20, scrollX * 20);
     }
-
-    processButtonInput('rt', gamepad.buttons[7]?.pressed, () => virtualClick());
-    processButtonInput('lt', gamepad.buttons[6]?.pressed, () => virtualClick(true));
-    processButtonInput('rs', gamepad.buttons[11]?.pressed, handleCursorSpeedToggle);
-  }
-}
-
-function handleSteamInputState(payload) {
-  if (!payload || !payload.connected || !payload.controller) {
-    state.useSteamInput = false;
-    if (!state.legacyGamepadEnabled) {
-      initLegacyGamepadSupport();
+    
+    // Right trigger (index 7) - Left click
+    if (gamepad.buttons[7]?.pressed && !state.lastInput.rt) {
+      virtualClick();
+      state.lastInput.rt = true;
+    } else if (!gamepad.buttons[7]?.pressed) {
+      state.lastInput.rt = false;
     }
-    return;
-  }
-
-  state.gamepadConnected = true;
-  state.useSteamInput = true;
-  const controller = payload.controller;
-  const nav = controller.nav || {};
-  const buttons = controller.buttons || {};
-  const analog = controller.analog || {};
-  const triggers = analog.triggers || { left: 0, right: 0 };
-
-  processDirectionalInput('up', !!nav.up);
-  processDirectionalInput('down', !!nav.down);
-  processDirectionalInput('left', !!nav.left);
-  processDirectionalInput('right', !!nav.right);
-
-  processButtonInput('a', !!buttons.confirm, activateFocused);
-  processButtonInput('b', !!buttons.back, () => goBack());
-  processButtonInput('x', !!buttons.oskBackspace, () => {
-    if (state.oskVisible) backspaceOSK();
-  });
-  processButtonInput('y', !!buttons.oskSpace, () => {
-    if (state.oskVisible) {
-      appendToOSK(' ');
-    } else {
-      openOSK('search');
+    
+    // Left trigger (index 6) - Right click
+    if (gamepad.buttons[6]?.pressed && !state.lastInput.lt) {
+      virtualClick(true);
+      state.lastInput.lt = true;
+    } else if (!gamepad.buttons[6]?.pressed) {
+      state.lastInput.lt = false;
     }
-  });
-
-  const shoulderLeftPressed = !!buttons.shoulderLeft || triggers.left > 0.6;
-  const shoulderRightPressed = !!buttons.shoulderRight || triggers.right > 0.6;
-
-  processButtonInput('lb', shoulderLeftPressed, () => {
-    if (state.oskVisible) {
-      clearOSK();
-    } else if (state.currentSection === 'browse' && state.currentWebview) {
-      goBack();
-    }
-  });
-
-  processButtonInput('rb', shoulderRightPressed, () => {
-    if (state.oskVisible) {
-      submitOSK();
-    } else if (state.currentSection === 'browse' && state.currentWebview) {
-      goForward();
-    }
-  });
-
-  processButtonInput('select', !!buttons.toggleSidebar, () => {
-    if (state.currentSection === 'browse' && state.currentWebview) {
-      toggleSidebar();
-    }
-  });
-
-  processButtonInput('start', !!buttons.menu, () => {
-    if (state.currentSection === 'browse' && state.currentWebview) {
-      toggleSidebar();
-    } else if (state.currentSection !== 'settings') {
-      switchSection('settings');
-    } else {
-      switchSection('home');
-    }
-  });
-
-  processButtonInput('osk', !!buttons.showOsk, () => {
-    if (state.currentWebview) {
-      openOSKForWebview();
-    } else {
-      openOSK('search');
-    }
-  });
-
-  if (state.cursorEnabled && state.currentWebview) {
-    const cursorVec = analog.cursor || { x: 0, y: 0 };
-    const scrollVec = analog.scroll || { x: 0, y: 0 };
-    if (Math.abs(cursorVec.x) > 0.05 || Math.abs(cursorVec.y) > 0.05) {
-      moveCursor(cursorVec.x * state.cursorSpeed, cursorVec.y * state.cursorSpeed);
-    }
-    if (Math.abs(scrollVec.x) > 0.05 || Math.abs(scrollVec.y) > 0.05) {
-      scrollWebview(scrollVec.y * 40, scrollVec.x * 40);
-    }
-
-    const primaryPressed = !!buttons.cursorPrimary || triggers.right > 0.6;
-    const secondaryPressed = !!buttons.cursorSecondary || triggers.left > 0.6;
-    processButtonInput('rt', primaryPressed, () => virtualClick());
-    processButtonInput('lt', secondaryPressed, () => virtualClick(true));
-    processButtonInput('rs', !!buttons.cursorSpeed, handleCursorSpeedToggle);
-  }
-}
-
-function cleanupSteamInput() {
-  if (state.steamInputUnsubscribe) {
-    try { state.steamInputUnsubscribe(); } catch {}
-    state.steamInputUnsubscribe = null;
-  }
-  if (window.steamInputAPI) {
-    try { window.steamInputAPI.stop(); } catch (err) {
-      console.warn('[BigPicture] Failed to stop Steam Input bridge:', err);
+    
+    // Right stick click (index 11) - Toggle cursor speed
+    if (gamepad.buttons[11]?.pressed && !state.lastInput.rs) {
+      state.cursorSpeed = state.cursorSpeed === 15 ? 8 : (state.cursorSpeed === 8 ? 25 : 15);
+      showToast(`Cursor speed: ${state.cursorSpeed === 8 ? 'Slow' : state.cursorSpeed === 15 ? 'Normal' : 'Fast'}`);
+      state.lastInput.rs = true;
+    } else if (!gamepad.buttons[11]?.pressed) {
+      state.lastInput.rs = false;
     }
   }
-  state.useSteamInput = false;
 }
 
 // =============================================================================

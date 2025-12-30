@@ -5,26 +5,22 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "start:steam-deck": "NEBULA_PROFILE=steam-deck electron .",
-    "start:big-picture": "NEBULA_PROFILE=big-picture electron .",
+    "start:dev": "electron . --no-sandbox --disable-gpu",
+    "start:linux": "electron . --no-sandbox",
     "dist": "electron-builder",
-    "dist:steam-deck": "set NEBULA_PROFILE=steam-deck && electron-builder",
-    "dist:big-picture": "set NEBULA_PROFILE=big-picture && electron-builder",
     "run": "electron ."
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "A lightweight, privacy-focused browser with controller-friendly Big Picture Mode for gaming and Steam Deck",
+  "description": "",
   "dependencies": {
     "dompurify": "^3.1.6",
     "electron-updater": "^6.6.2",
     "highlight.js": "^11.9.0",
-    "marked": "^12.0.2",
-    "steamworks.js": "^0.4.0"
+    "marked": "^12.0.2"
   },
   "devDependencies": {
-    "cross-env": "^10.1.0",
     "electron": "^39.2.7",
     "electron-builder": "^23.0.0",
     "electron-nightly": "^39.0.0-nightly.20250811"
@@ -46,13 +42,7 @@
       "icon": "assets/images/Logos/Nebula-Favicon.ico"
     },
     "linux": {
-      "target": [
-        "AppImage",
-        "tar.gz"
-      ],
-      "icon": "assets/images/Logos/Nebula-Favicon.png",
-      "category": "Utility",
-      "maintainer": "NebulaBrowser Contributors"
+      "icon": "assets/images/Logos/Nebula-Favicon.png"
     }
   }
 }
