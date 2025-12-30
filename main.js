@@ -9,12 +9,46 @@ const PerformanceMonitor = require('./performance-monitor');
 const GPUFallback = require('./gpu-fallback');
 const GPUConfig = require('./gpu-config');
 const PluginManager = require('./plugin-manager');
+const portableData = require('./portable-data');
 
 // Initialize performance monitoring and GPU management
 const perfMonitor = new PerformanceMonitor();
 const gpuFallback = new GPUFallback();
 const gpuConfig = new GPUConfig();
 const pluginManager = new PluginManager();
+
+// Initialize portable data paths BEFORE app.ready (must be done early)
+// This only affects Linux when NEBULA_PORTABLE=1 is set
+portableData.initialize();
+
+/**
+ * Get the path for a user data file (bookmarks, history, etc.)
+ * Uses portable path on Linux when in portable mode, otherwise uses __dirname
+ * @param {string} filename - The filename (e.g., 'bookmarks.json')
+ * @returns {string} The full path to the file
+ */
+function getDataFilePath(filename) {
+  const portablePath = portableData.getDataFilePath(filename);
+  if (portablePath) {
+    return portablePath;
+  }
+  return path.join(__dirname, filename);
+}
+
+/**
+ * Get the directory path for user data files
+ * Uses portable path on Linux when in portable mode, otherwise uses __dirname
+ * @returns {string} The directory path
+ */
+function getDataDirPath() {
+  if (portableData.isPortableMode()) {
+    const portablePath = portableData.getPortableDataPath();
+    if (portablePath) {
+      return portablePath;
+    }
+  }
+  return __dirname;
+}
 
 // Try to enable WebAuthn/platform authenticator features early.
 // This helps Chromium expose platform authenticators (Touch ID / built-in) where supported.
@@ -733,7 +767,7 @@ ipcMain.handle('window-close', event => {
 // Site history is now handled via localStorage in the renderer
 // But keep these handlers for compatibility and potential future use
 ipcMain.handle('load-site-history', async () => {
-  const filePath = path.join(__dirname, 'site-history.json');
+  const filePath = getDataFilePath('site-history.json');
   try {
     const data = await fs.promises.readFile(filePath, 'utf-8');
     return JSON.parse(data);
@@ -743,9 +777,13 @@ ipcMain.handle('load-site-history', async () => {
 });
 
 ipcMain.handle('save-site-history', async (event, history) => {
-  const filePath = path.join(__dirname, 'site-history.json');
+  const filePath = getDataFilePath('site-history.json');
   try {
-    await fs.promises.writeFile(filePath, JSON.stringify(history, null, 2));
+    if (portableData.isPortableMode()) {
+      await portableData.writeSecureFileAsync(filePath, JSON.stringify(history, null, 2));
+    } else {
+      await fs.promises.writeFile(filePath, JSON.stringify(history, null, 2));
+    }
     return true;
   } catch (err) {
     return false;
@@ -753,7 +791,7 @@ ipcMain.handle('save-site-history', async (event, history) => {
 });
 
 ipcMain.handle('clear-site-history', async () => {
-  const filePath = path.join(__dirname, 'site-history.json');
+  const filePath = getDataFilePath('site-history.json');
   try {
     await fs.promises.writeFile(filePath, JSON.stringify([], null, 2));
     return true;
@@ -763,7 +801,7 @@ ipcMain.handle('clear-site-history', async () => {
 });
 
 ipcMain.handle('load-search-history', async () => {
-  const filePath = path.join(__dirname, 'search-history.json');
+  const filePath = getDataFilePath('search-history.json');
   try {
     const data = await fs.promises.readFile(filePath, 'utf-8');
     return JSON.parse(data);
@@ -773,9 +811,13 @@ ipcMain.handle('load-search-history', async () => {
 });
 
 ipcMain.handle('save-search-history', async (event, history) => {
-  const filePath = path.join(__dirname, 'search-history.json');
+  const filePath = getDataFilePath('search-history.json');
   try {
-    await fs.promises.writeFile(filePath, JSON.stringify(history, null, 2));
+    if (portableData.isPortableMode()) {
+      await portableData.writeSecureFileAsync(filePath, JSON.stringify(history, null, 2));
+    } else {
+      await fs.promises.writeFile(filePath, JSON.stringify(history, null, 2));
+    }
     return true;
   } catch (err) {
     return false;
@@ -817,7 +859,7 @@ ipcMain.on('set-display-scale', (event, scale) => {
 // Bookmark management
 ipcMain.handle('load-bookmarks', async () => {
   try {
-    const bookmarksPath = path.join(__dirname, 'bookmarks.json');
+    const bookmarksPath = getDataFilePath('bookmarks.json');
     try {
       await fs.promises.access(bookmarksPath);
     } catch {
@@ -831,8 +873,8 @@ ipcMain.handle('load-bookmarks', async () => {
   } catch (error) {
     console.error('Error loading bookmarks:', error);
     // Try to create a backup if the file is corrupted
-    const bookmarksPath = path.join(__dirname, 'bookmarks.json');
-    const backupPath = path.join(__dirname, `bookmarks.backup.${Date.now()}.json`);
+    const bookmarksPath = getDataFilePath('bookmarks.json');
+    const backupPath = getDataFilePath(`bookmarks.backup.${Date.now()}.json`);
     try {
       await fs.promises.copyFile(bookmarksPath, backupPath);
       console.log(`Corrupted bookmarks file backed up to: ${backupPath}`);
@@ -845,13 +887,18 @@ ipcMain.handle('load-bookmarks', async () => {
 
 ipcMain.handle('save-bookmarks', async (event, bookmarks) => {
   try {
-    const bookmarksPath = path.join(__dirname, 'bookmarks.json');
+    const bookmarksPath = getDataFilePath('bookmarks.json');
     try {
       await fs.promises.access(bookmarksPath);
-      const backupPath = path.join(__dirname, 'bookmarks.backup.json');
+      const backupPath = getDataFilePath('bookmarks.backup.json');
       await fs.promises.copyFile(bookmarksPath, backupPath);
     } catch {}
-    await fs.promises.writeFile(bookmarksPath, JSON.stringify(bookmarks, null, 2));
+    // Use secure file writing in portable mode
+    if (portableData.isPortableMode()) {
+      await portableData.writeSecureFileAsync(bookmarksPath, JSON.stringify(bookmarks, null, 2));
+    } else {
+      await fs.promises.writeFile(bookmarksPath, JSON.stringify(bookmarks, null, 2));
+    }
     console.log(`Saved ${bookmarks.length} bookmarks to file`);
     return true;
   } catch (error) {
@@ -886,8 +933,8 @@ ipcMain.handle('clear-browser-data', async () => {
     }
 
     // Also reset on-disk history JSON files managed by the app
-    const siteHistoryPath = path.join(__dirname, 'site-history.json');
-    const searchHistoryPath = path.join(__dirname, 'search-history.json');
+    const siteHistoryPath = getDataFilePath('site-history.json');
+    const searchHistoryPath = getDataFilePath('search-history.json');
     try { await fs.promises.writeFile(siteHistoryPath, JSON.stringify([], null, 2)); } catch {}
     try { await fs.promises.writeFile(searchHistoryPath, JSON.stringify([], null, 2)); } catch {}
 
@@ -900,7 +947,7 @@ ipcMain.handle('clear-browser-data', async () => {
 
 // Optional: standalone clear for search history JSON
 ipcMain.handle('clear-search-history', async () => {
-  const filePath = path.join(__dirname, 'search-history.json');
+  const filePath = getDataFilePath('search-history.json');
   try {
     await fs.promises.writeFile(filePath, JSON.stringify([], null, 2));
     return true;
