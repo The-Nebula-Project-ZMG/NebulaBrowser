@@ -225,6 +225,29 @@ window.addEventListener('beforeunload', () => {
 });
 
 // =============================================================================
+// EARLY GAMEPAD INITIALIZATION - Critical for Steam Deck
+// =============================================================================
+// Initialize gamepad polling as EARLY as possible to signal Steam Input
+// that this app handles controller input natively. This MUST happen before
+// Steam decides to apply mouse/keyboard emulation.
+// 
+// We try to initialize immediately when preload runs, not waiting for DOMContentLoaded,
+// because Steam's input layer makes decisions very early in the process lifecycle.
+// =============================================================================
+
+// Try immediate initialization (works in most Electron contexts)
+try {
+  if (typeof navigator !== 'undefined' && navigator.getGamepads) {
+    // Start polling immediately - this is the key signal to Steam
+    initGamepadHandler();
+    console.log('[NebulaGamepad] Early initialization successful - Steam should recognize controller input');
+  }
+} catch (e) {
+  // Will retry on DOMContentLoaded
+  console.log('[NebulaGamepad] Early init deferred, will retry on DOM ready');
+}
+
+// =============================================================================
 // DOM READY & INITIALIZATION
 // =============================================================================
 
@@ -234,8 +257,10 @@ window.addEventListener('DOMContentLoaded', () => {
   domReady = true;
   console.log("Browser UI loaded.");
   
-  // Initialize gamepad handler for Steam Deck/SteamOS support
-  initGamepadHandler();
+  // Re-initialize gamepad handler if early init failed
+  if (!gamepadState.initialized) {
+    initGamepadHandler();
+  }
 });
 
 // Optimized API exposure with error handling and caching

@@ -1,3 +1,38 @@
+// =============================================================================
+// STEAM DECK / STEAMOS CONTROLLER INPUT FIX
+// =============================================================================
+// These environment variables MUST be set before Electron/Chromium initializes.
+// They signal to Steam's input layer that this application handles its own
+// controller input and should NOT have mouse/keyboard emulation applied.
+//
+// Without these, Steam assumes the app needs Desktop mouse emulation when running
+// in Game Mode, which overrides the app's native gamepad support.
+// =============================================================================
+
+// Tell SDL (and by extension Steam Input) that this app uses the gamepad API
+// SDL_GAMECONTROLLERCONFIG is used by SDL to know about controllers
+process.env.SDL_GAMECONTROLLERCONFIG = process.env.SDL_GAMECONTROLLERCONFIG || '';
+
+// Signal that this app handles gamepad input natively
+// This prevents Steam from applying mouse emulation in Game Mode
+process.env.SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD = '1';
+
+// Prevent Steam from remapping the controller to keyboard/mouse
+// Setting to '1' tells Steam we want raw controller access
+process.env.SDL_GAMECONTROLLER_IGNORE_DEVICES = '';
+
+// Disable Steam's overlay input hooks for this process if possible
+process.env.SteamNoOverlayUIDrawing = process.env.SteamNoOverlayUIDrawing || '0';
+
+// Tell Steam Input we're a native controller app
+// When STEAM_INPUT_ENABLE_VIRTUAL_GAMEPAD is 0, Steam won't virtualize the gamepad
+if (!process.env.STEAM_INPUT_ENABLE_VIRTUAL_GAMEPAD) {
+  process.env.STEAM_INPUT_ENABLE_VIRTUAL_GAMEPAD = '0';
+}
+
+// Hint that this is a game/controller-focused app
+process.env.SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS = '1';
+
 const { app, BrowserWindow, ipcMain, session, screen, shell, dialog, Menu, clipboard, webContents } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { pathToFileURL } = require('url');
@@ -59,6 +94,30 @@ try {
   app.commandLine.appendSwitch('enable-features', 'WebAuthn,WebAuthnNestedAssertions,WebAuthnCable');
 } catch (e) {
   // Non-fatal: some environments may not allow commandLine changes at this time.
+}
+
+// =============================================================================
+// GAMEPAD / CONTROLLER CHROMIUM FLAGS
+// =============================================================================
+// Enable native gamepad support in Chromium - helps with Steam Deck compatibility
+try {
+  // Enable raw gamepad access (bypasses Steam's virtualization when possible)
+  app.commandLine.appendSwitch('enable-gamepad-extensions');
+  
+  // Ensure the Gamepad API is enabled and working
+  app.commandLine.appendSwitch('enable-blink-features', 'GamepadExtensions');
+  
+  // On Linux/Steam Deck, this can help with gamepad detection
+  if (process.platform === 'linux') {
+    // Disable Chromium's sandbox for gamepad access if having issues
+    // (Only needed in some SteamOS configurations)
+    // app.commandLine.appendSwitch('no-sandbox');
+    
+    // Use the system's gamepad config rather than Chromium's built-in
+    app.commandLine.appendSwitch('enable-features', 'WebGamepad');
+  }
+} catch (e) {
+  console.warn('[Gamepad] Failed to set Chromium gamepad flags:', e.message);
 }
 
 // Configure GPU settings before app is ready

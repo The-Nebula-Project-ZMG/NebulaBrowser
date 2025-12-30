@@ -2,6 +2,36 @@
 
 Nebula Browser includes a **Big Picture Mode** - a controller-friendly, console-style interface designed for Steam Deck, handheld devices, and living room setups.
 
+## ⚠️ Steam Deck: Disabling Mouse Emulation
+
+If Steam is emulating mouse/keyboard input with the joysticks (overriding native controller support), you need to configure Steam Input:
+
+### Quick Fix - Steam Launch Options
+
+Add this to your Steam launch options (Right-click → Properties → Launch Options):
+
+```bash
+SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=0 STEAM_INPUT_ENABLE_VIRTUAL_GAMEPAD=0 %command% --big-picture
+```
+
+### Recommended Fix - Disable Steam Input Per-Game
+
+1. In Steam, right-click **Nebula** → **Properties** → **Controller**
+2. Set **"Override for Nebula"** to **"Disable Steam Input"**
+3. This completely disables Steam's input emulation for this app
+
+### Using the Steam Deck Launcher Script
+
+For the easiest setup, use the included launcher script:
+
+1. Set Steam launch options to: `./start-steamdeck.sh`
+
+The script automatically sets all necessary environment variables.
+
+See [README-STEAM.md](../README-STEAM.md) for detailed troubleshooting.
+
+---
+
 ## Features
 
 ### 🎮 Controller Support

@@ -135,22 +135,68 @@ gamepadAPI.setDebug(true);
 
 If Steam is still applying mouse emulation:
 
-1. **Verify gamepad polling is active**: Open DevTools (F12) and run `gamepadAPI.getState()` - check that `isPolling` is `true`
-2. **Check gamepad connection**: Run `gamepadAPI.getConnected()` to see detected gamepads
-3. **Press a button first**: On Linux, the `gamepadconnected` event may not fire until the first button press
-4. **Enable debug mode**: Run `gamepadAPI.setDebug(true)` to see detailed logs
-5. **Restart the app**: Close Nebula completely and relaunch from Steam
+1. **Configure Steam Input per-game** (most reliable fix):
+   - In Steam, right-click Nebula → Properties → Controller
+   - Set **"Override for Nebula"** to **"Disable Steam Input"**
+   - This completely disables Steam's input emulation for this app
+
+2. **Verify gamepad polling is active**: Open DevTools (F12) and run `gamepadAPI.getState()` - check that `isPolling` is `true`
+3. **Check gamepad connection**: Run `gamepadAPI.getConnected()` to see detected gamepads
+4. **Press a button first**: On Linux, the `gamepadconnected` event may not fire until the first button press
+5. **Enable debug mode**: Run `gamepadAPI.setDebug(true)` to see detailed logs
+6. **Restart the app**: Close Nebula completely and relaunch from Steam
 
 ### Steam Launch Options
 
+Add these to your Steam launch options (Right-click game → Properties → Launch Options):
+
+```bash
+# Disable Steam Input completely (recommended for native controller support)
+SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=0 %command%
+
+# Force native gamepad without Steam's emulation layer
+STEAM_INPUT_ENABLE_VIRTUAL_GAMEPAD=0 %command%
+
+# Combined - full native controller mode with Big Picture UI
+SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=0 STEAM_INPUT_ENABLE_VIRTUAL_GAMEPAD=0 %command% --big-picture
+
+# If you need to debug controller issues
+SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=0 %command% --big-picture 2>&1 | tee ~/nebula-debug.log
 ```
-# Force Big Picture Mode
+
+### Steam Deck Recommended Setup
+
+For the best experience on Steam Deck:
+
+1. **Add Nebula as a Non-Steam Game** (if not using Steamworks version)
+2. **Controller Settings**:
+   - Right-click Nebula → Properties → Controller
+   - Set to **"Disable Steam Input"** 
+3. **Launch Options**:
+   ```
+   SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=0 STEAM_INPUT_ENABLE_VIRTUAL_GAMEPAD=0 %command% --big-picture
+   ```
+4. **Shortcuts** (optional):
+   - Configure gamepad shortcuts in Steam for Steam button actions (screenshots, etc.)
+
+### Why This Is Needed
+
+Steam Deck / SteamOS Game Mode applies "Desktop Configuration" mouse/keyboard emulation to apps that don't appear to handle controller input. Even though Nebula polls `navigator.getGamepads()` continuously, Steam's input layer initializes before the app can signal its intent.
+
+The solution is two-fold:
+1. **Environment variables** (`SDL_GAMECONTROLLER_*`) signal to Steam's SDL-based input layer early
+2. **Steam Input settings** ("Disable Steam Input") bypasses the emulation entirely
+
+### Force Big Picture Mode
+
+```bash
+# Via command line
 ./Nebula --big-picture
+
+# Via environment
+NEBULA_BIG_PICTURE=1 ./Nebula
 
 # Disable Big Picture Mode  
 ./Nebula --no-big-picture
-
-# Environment variables also work
-NEBULA_BIG_PICTURE=1 ./Nebula
 NEBULA_NO_BIG_PICTURE=1 ./Nebula
 ```
