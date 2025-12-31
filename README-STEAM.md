@@ -136,9 +136,17 @@ gamepadAPI.setDebug(true);
 If Steam is still applying mouse emulation:
 
 1. **Configure Steam Input per-game** (most reliable fix):
-   - In Steam, right-click Nebula → Properties → Controller
-   - Set **"Override for Nebula"** to **"Disable Steam Input"**
-   - This completely disables Steam's input emulation for this app
+   - **Windows / Desktop Steam UI**:
+     - Library → right-click Nebula → Properties → **Controller**
+     - Set **"Override for Nebula"** to **"Disable Steam Input"**
+   - **Steam Deck / SteamOS Gaming Mode**:
+     - Open Nebula → press the Steam button → **Controller Settings** (or the controller icon)
+     - Set the layout to a **Gamepad** template (not “Keyboard/Mouse”), or disable Steam Input if the toggle is available
+   - This stops Steam from translating controller input into keyboard/mouse events (“Desktop Layout” behavior).
+
+   If you **don’t see a Controller tab** (common when the Steam entry is treated as an “application/tool”):
+   - Use **Big Picture / Gaming Mode** and edit the **Controller Layout** for that specific entry.
+   - Or change Steam’s global Desktop Layout: Steam → Settings → Controller → **Desktop Layout** → pick a gamepad-focused template or remove mouse/keyboard bindings.
 
 2. **Verify gamepad polling is active**: Open DevTools (F12) and run `gamepadAPI.getState()` - check that `isPolling` is `true`
 3. **Check gamepad connection**: Run `gamepadAPI.getConnected()` to see detected gamepads
@@ -147,6 +155,20 @@ If Steam is still applying mouse emulation:
 6. **Restart the app**: Close Nebula completely and relaunch from Steam
 
 ### Steam Launch Options
+
+#### Windows
+
+The `VAR=value %command%` syntax does **not** work on Windows. Use the Steam UI instead:
+
+1. **Library** → right-click Nebula → **Properties** → **Controller** → set to **"Disable Steam Input"**
+2. If no Controller tab exists, open Steam in **Big Picture Mode** → Nebula → **Manage Game** (gear) → **Controller Options** → **Disable Steam Input**
+
+If you must use launch options on Windows, use this wrapper syntax:
+```bat
+cmd /c "set SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=0 && %command%"
+```
+
+#### Linux / SteamOS / Steam Deck
 
 Add these to your Steam launch options (Right-click game → Properties → Launch Options):
 
@@ -186,6 +208,16 @@ Steam Deck / SteamOS Game Mode applies "Desktop Configuration" mouse/keyboard em
 The solution is two-fold:
 1. **Environment variables** (`SDL_GAMECONTROLLER_*`) signal to Steam's SDL-based input layer early
 2. **Steam Input settings** ("Disable Steam Input") bypasses the emulation entirely
+
+### Shipping Defaults (Steamworks “Software/App” limitation)
+
+If your Steamworks package is categorized as **Software/Application**, Steamworks may not expose per-title Steam Input configuration the way it does for games.
+
+In that case:
+- You generally **cannot force a global Steam Input toggle** for all users from Steamworks.
+- The practical, shippable approach is to (a) **consume controller input natively** (Nebula does this via early Gamepad API polling) so Steam Deck/Game Mode backs off Desktop emulation, and (b) provide user-facing guidance for disabling Steam Input / choosing a Gamepad layout.
+
+If you need Steam Input defaults controlled centrally, the usual path is to ask Valve Partner Support to enable the relevant Steam Input configuration for your App ID, or to re-categorize the title where appropriate.
 
 ### Force Big Picture Mode
 

@@ -15,7 +15,10 @@ process.env.SDL_GAMECONTROLLERCONFIG = process.env.SDL_GAMECONTROLLERCONFIG || '
 
 // Signal that this app handles gamepad input natively
 // This prevents Steam from applying mouse emulation in Game Mode
-process.env.SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD = '1';
+// IMPORTANT: set to 0 to avoid Steam's virtual gamepad layer when possible.
+// Forcing this to 1 can keep Steam virtualization/emulation active.
+process.env.SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD =
+  process.env.SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD ?? '0';
 
 // Prevent Steam from remapping the controller to keyboard/mouse
 // Setting to '1' tells Steam we want raw controller access
@@ -26,9 +29,8 @@ process.env.SteamNoOverlayUIDrawing = process.env.SteamNoOverlayUIDrawing || '0'
 
 // Tell Steam Input we're a native controller app
 // When STEAM_INPUT_ENABLE_VIRTUAL_GAMEPAD is 0, Steam won't virtualize the gamepad
-if (!process.env.STEAM_INPUT_ENABLE_VIRTUAL_GAMEPAD) {
-  process.env.STEAM_INPUT_ENABLE_VIRTUAL_GAMEPAD = '0';
-}
+process.env.STEAM_INPUT_ENABLE_VIRTUAL_GAMEPAD =
+  process.env.STEAM_INPUT_ENABLE_VIRTUAL_GAMEPAD ?? '0';
 
 // Hint that this is a game/controller-focused app
 process.env.SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS = '1';
@@ -48,10 +50,13 @@ process.env.SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS = '1';
 let steamworksClient = null;
 let steamworksInitialized = false;
 let steamInput = null;
+let steamworksModule = null;
+let steamCallbacksInterval = null;
 
 function initializeSteamworks() {
   try {
     const steamworks = require('steamworks.js');
+    steamworksModule = steamworks;
     
     // Initialize with Nebula's Steam App ID
     steamworksClient = steamworks.init(4290110);
@@ -67,6 +72,27 @@ function initializeSteamworks() {
       steamInput = steamworksClient.input;
       if (steamInput) {
         console.log('[Steamworks] Steam Input API available - native controller mode enabled');
+
+        // Explicitly initialize Steam Input.
+        // Also ensure Steam callbacks are pumped; Steamworks features (including input)
+        // depend on runCallbacks being called regularly.
+        try {
+          if (typeof steamInput.init === 'function') {
+            steamInput.init();
+          }
+        } catch (initErr) {
+          console.log('[Steamworks] Steam Input init failed:', initErr.message);
+        }
+
+        if (!steamCallbacksInterval && typeof steamworks.runCallbacks === 'function') {
+          steamCallbacksInterval = setInterval(() => {
+            try {
+              steamworks.runCallbacks();
+            } catch {
+              // Ignore callback pump errors to avoid crashing the app.
+            }
+          }, 100);
+        }
         
         // Try to get connected controllers to verify input is working
         try {
@@ -100,6 +126,19 @@ function initializeSteamworks() {
 // Initialize Steamworks early (before app.ready)
 // This is critical for Steam Input to recognize native controller support
 initializeSteamworks();
+
+// Cleanup Steam callback pump on exit
+try {
+  app?.once?.('before-quit', () => {
+    if (steamCallbacksInterval) {
+      clearInterval(steamCallbacksInterval);
+      steamCallbacksInterval = null;
+    }
+    try {
+      steamInput?.shutdown?.();
+    } catch {}
+  });
+} catch {}
 
 const { app, BrowserWindow, ipcMain, session, screen, shell, dialog, Menu, clipboard, webContents } = require('electron');
 const { autoUpdater } = require('electron-updater');
