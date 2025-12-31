@@ -127,20 +127,18 @@ function initializeSteamworks() {
 // This is critical for Steam Input to recognize native controller support
 initializeSteamworks();
 
-// Cleanup Steam callback pump on exit
-try {
-  app?.once?.('before-quit', () => {
-    if (steamCallbacksInterval) {
-      clearInterval(steamCallbacksInterval);
-      steamCallbacksInterval = null;
-    }
-    try {
-      steamInput?.shutdown?.();
-    } catch {}
-  });
-} catch {}
-
 const { app, BrowserWindow, ipcMain, session, screen, shell, dialog, Menu, clipboard, webContents } = require('electron');
+
+// Cleanup Steam callback pump on exit
+app.once('before-quit', () => {
+  if (steamCallbacksInterval) {
+    clearInterval(steamCallbacksInterval);
+    steamCallbacksInterval = null;
+  }
+  try {
+    steamInput?.shutdown?.();
+  } catch {}
+});
 const { autoUpdater } = require('electron-updater');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
