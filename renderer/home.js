@@ -539,7 +539,7 @@ function setupSectionObserver() {
 // Load and render bookmarks immediately
 (async () => {
   bookmarks = await loadBookmarks();
-  // Wait a bit for styles to load before rendering
+ 
   setTimeout(() => {
     renderBookmarks();
   }, 100);
