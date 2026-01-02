@@ -86,6 +86,10 @@ typings/
 site-history.json
 bookmarks.json
 bookmarks.backup.json
+search-history.json
+
+# Portable user data folder
+user-data/
 
 # AppImage / SteamOS
 squashfs-root/

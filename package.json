@@ -35,6 +35,12 @@
         "repo": "NebulaBrowser"
       }
     ],
+    "files": [
+      "**/*",
+      "!user-data/**",
+      "!*.backup.json"
+    ],
+    "extraResources": [],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "assets/images/Logos/Nebula-Favicon.icns"

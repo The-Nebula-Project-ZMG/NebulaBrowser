@@ -158,12 +158,13 @@ const gpuConfig = new GPUConfig();
 const pluginManager = new PluginManager();
 
 // Initialize portable data paths BEFORE app.ready (must be done early)
-// This only affects Linux when NEBULA_PORTABLE=1 is set
+// This enables portable mode on all platforms (Windows, macOS, Linux)
+// Data is stored in 'user-data' folder within the application directory
 portableData.initialize();
 
 /**
  * Get the path for a user data file (bookmarks, history, etc.)
- * Uses portable path on Linux when in portable mode, otherwise uses __dirname
+ * Uses portable path when in portable mode, otherwise uses __dirname
  * @param {string} filename - The filename (e.g., 'bookmarks.json')
  * @returns {string} The full path to the file
  */
@@ -177,7 +178,7 @@ function getDataFilePath(filename) {
 
 /**
  * Get the directory path for user data files
- * Uses portable path on Linux when in portable mode, otherwise uses __dirname
+ * Uses portable path when in portable mode, otherwise uses __dirname
  * @returns {string} The directory path
  */
 function getDataDirPath() {
@@ -968,7 +969,11 @@ ipcMain.handle('save-site-history', async (event, history) => {
 ipcMain.handle('clear-site-history', async () => {
   const filePath = getDataFilePath('site-history.json');
   try {
-    await fs.promises.writeFile(filePath, JSON.stringify([], null, 2));
+    if (portableData.isPortableMode()) {
+      await portableData.writeSecureFileAsync(filePath, JSON.stringify([], null, 2));
+    } else {
+      await fs.promises.writeFile(filePath, JSON.stringify([], null, 2));
+    }
     return true;
   } catch (err) {
     return false;
@@ -1110,8 +1115,20 @@ ipcMain.handle('clear-browser-data', async () => {
     // Also reset on-disk history JSON files managed by the app
     const siteHistoryPath = getDataFilePath('site-history.json');
     const searchHistoryPath = getDataFilePath('search-history.json');
-    try { await fs.promises.writeFile(siteHistoryPath, JSON.stringify([], null, 2)); } catch {}
-    try { await fs.promises.writeFile(searchHistoryPath, JSON.stringify([], null, 2)); } catch {}
+    try { 
+      if (portableData.isPortableMode()) {
+        await portableData.writeSecureFileAsync(siteHistoryPath, JSON.stringify([], null, 2));
+      } else {
+        await fs.promises.writeFile(siteHistoryPath, JSON.stringify([], null, 2));
+      }
+    } catch {}
+    try { 
+      if (portableData.isPortableMode()) {
+        await portableData.writeSecureFileAsync(searchHistoryPath, JSON.stringify([], null, 2));
+      } else {
+        await fs.promises.writeFile(searchHistoryPath, JSON.stringify([], null, 2));
+      }
+    } catch {}
 
     return true; // Indicate success
   } catch (error) {
@@ -1124,7 +1141,11 @@ ipcMain.handle('clear-browser-data', async () => {
 ipcMain.handle('clear-search-history', async () => {
   const filePath = getDataFilePath('search-history.json');
   try {
-    await fs.promises.writeFile(filePath, JSON.stringify([], null, 2));
+    if (portableData.isPortableMode()) {
+      await portableData.writeSecureFileAsync(filePath, JSON.stringify([], null, 2));
+    } else {
+      await fs.promises.writeFile(filePath, JSON.stringify([], null, 2));
+    }
     return true;
   } catch (err) {
     return false;
@@ -1183,7 +1204,7 @@ ipcMain.handle('open-tab-in-new-window', (event, url) => {
 });
 
 ipcMain.handle('save-site-history-entry', async (event, url) => {
-  const filePath = path.join(__dirname, 'site-history.json');
+  const filePath = getDataFilePath('site-history.json');
   try {
     let data = [];
     try {
@@ -1195,7 +1216,11 @@ ipcMain.handle('save-site-history-entry', async (event, url) => {
     // Add to beginning and clamp size
     data.unshift(url);
     if (data.length > 100) data = data.slice(0, 100);
-    await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2));
+    if (portableData.isPortableMode()) {
+      await portableData.writeSecureFileAsync(filePath, JSON.stringify(data, null, 2));
+    } else {
+      await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2));
+    }
     return true;
   } catch (err) {
     console.error('[MAIN] Error saving site history entry:', err);
