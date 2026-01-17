@@ -920,7 +920,9 @@ ipcMain.handle('get-app-info', () => {
     node: process.versions.node,
     v8: process.versions.v8,
     platform: process.platform,
-    arch: process.arch
+    arch: process.arch,
+    isPackaged: app.isPackaged,
+    isDevelopment: !app.isPackaged
   };
 });
 
@@ -1392,50 +1394,90 @@ ipcMain.handle('get-electron-versions', async (event, buildType = 'stable') => {
 });
 
 ipcMain.handle('upgrade-electron', async (event, buildType = 'stable') => {
+  const https = require('https');
   const { exec } = require('child_process');
-  const packageName = buildType === 'nightly' ? 'electron-nightly' : 'electron';
-  
+
+  console.log('[ELECTRON-UPGRADE] Checking environment...');
+  console.log('[ELECTRON-UPGRADE] app.isPackaged:', app.isPackaged);
+  console.log('[ELECTRON-UPGRADE] __dirname:', __dirname);
+  console.log('[ELECTRON-UPGRADE] process.resourcesPath:', process.resourcesPath);
+
+  // For packaged apps (like win-unpacked), we can't use npm
+  // This feature is only for development with `npm start`
+  // Steam users will get updates through Steam
+
   return new Promise((resolve) => {
-    // First, remove the other electron package if switching types
-    const otherPackage = buildType === 'nightly' ? 'electron' : 'electron-nightly';
-    
+    resolve({
+      success: false,
+      error: 'Electron updates are not available in packaged builds',
+      message: 'For Steam users: Updates are delivered through Steam.\n\nFor developers: Use "npm start" to enable Electron updates during development.'
+    });
+  });
+
+  /* Keeping this code commented for future reference if needed
+  const packageName = buildType === 'nightly' ? 'electron-nightly' : 'electron';
+  const packageJsonPath = path.join(__dirname, 'package.json');
+  const nodeModulesPath = path.join(__dirname, 'node_modules');
+
+  return new Promise((resolve) => {
+    // Check if we're in a real development environment
+    if (app.isPackaged || !fs.existsSync(packageJsonPath) || !fs.existsSync(nodeModulesPath)) {
+      resolve({
+        success: false,
+        error: 'Electron updates are only available in development mode',
+        message: 'Run the app with "npm start" to enable Electron updates.'
+      });
+      return;
+    }
+
     // Run npm install to upgrade the package
     const command = `npm install --save-dev ${packageName}@latest`;
-    
-    exec(command, 
-      { cwd: __dirname, maxBuffer: 10 * 1024 * 1024 },
+
+    console.log('[ELECTRON-UPGRADE] Running command:', command);
+    console.log('[ELECTRON-UPGRADE] Working directory:', __dirname);
+
+    exec(command,
+      {
+        cwd: __dirname,
+        maxBuffer: 10 * 1024 * 1024,
+        shell: true,
+        env: process.env
+      },
       (error, stdout, stderr) => {
         if (error) {
-          console.error('Upgrade failed:', error);
-          console.error('stderr:', stderr);
+          console.error('[ELECTRON-UPGRADE] Upgrade failed:', error);
+          console.error('[ELECTRON-UPGRADE] stderr:', stderr);
+
+          let errorMsg = error.message;
+          if (errorMsg.includes('ENOENT')) {
+            errorMsg = 'npm command not found. Please ensure Node.js and npm are installed.';
+          } else if (errorMsg.includes('EACCES')) {
+            errorMsg = 'Permission denied. Try running as administrator.';
+          }
+
           resolve({
             success: false,
-            error: error.message,
+            error: errorMsg,
             message: 'Failed to upgrade Electron'
           });
         } else {
-          console.log('Upgrade output:', stdout);
-          console.log('Upgrade stderr:', stderr);
-          
-          // Update package.json to remove the other electron variant if needed
+          console.log('[ELECTRON-UPGRADE] Upgrade output:', stdout);
+          if (stderr) console.log('[ELECTRON-UPGRADE] stderr:', stderr);
+
+          // Clean up alternate package
           try {
-            const packageJsonPath = path.join(__dirname, 'package.json');
             const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-            
-            // Remove electron if we're upgrading to nightly
             if (buildType === 'nightly' && packageJson.devDependencies?.electron) {
               delete packageJson.devDependencies.electron;
               fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
-            }
-            // Remove electron-nightly if we're upgrading to stable
-            else if (buildType === 'stable' && packageJson.devDependencies?.['electron-nightly']) {
+            } else if (buildType === 'stable' && packageJson.devDependencies?.['electron-nightly']) {
               delete packageJson.devDependencies['electron-nightly'];
               fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
             }
           } catch (err) {
-            console.warn('Could not clean up alternate electron package:', err);
+            console.warn('[ELECTRON-UPGRADE] Could not clean up alternate package:', err);
           }
-          
+
           resolve({
             success: true,
             message: 'Electron upgrade completed. Restarting application...'
@@ -1444,6 +1486,7 @@ ipcMain.handle('upgrade-electron', async (event, buildType = 'stable') => {
       }
     );
   });
+  */
 });
 
 ipcMain.handle('restart-app', async (event) => {

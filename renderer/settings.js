@@ -355,8 +355,8 @@ async function populateAbout() {
 // Populate about info after DOM is ready
 window.addEventListener('DOMContentLoaded', () => {
   populateAbout();
-  setupElectronUpgrade();
-  
+  setupElectronUpdater();
+
   // Refresh about info when About tab is clicked
   const aboutTabBtn = document.getElementById('tab-about');
   if (aboutTabBtn) {
@@ -364,165 +364,220 @@ window.addEventListener('DOMContentLoaded', () => {
       // Refresh after a short delay to allow tab transition
       setTimeout(() => {
         populateAbout();
+        // Auto-check for updates when About tab is opened
+        const checkBtn = document.getElementById('check-electron-versions');
+        if (checkBtn && !checkBtn.disabled) {
+          checkBtn.click();
+        }
       }, 100);
     });
   }
 });
 
-// Electron upgrade feature setup
-async function setupElectronUpgrade() {
-  const versionSelect = document.getElementById('electron-version-select');
+// Electron updater feature setup (for security updates)
+async function setupElectronUpdater() {
+  const securityUpdatesSection = document.querySelector('.customization-group:has(#electron-update-banner)');
+  const banner = document.getElementById('electron-update-banner');
+  const statusSpan = document.getElementById('electron-update-status');
+  const detailsDiv = document.getElementById('electron-update-details');
+  const progressDiv = document.getElementById('electron-update-progress');
   const checkBtn = document.getElementById('check-electron-versions');
-  const upgradeBtn = document.getElementById('upgrade-electron-btn');
-  const loadingSpan = document.getElementById('electron-loading');
-  const versionContainer = document.getElementById('electron-versions-container');
-  const versionInfo = document.getElementById('electron-version-info');
-  const versionText = document.getElementById('electron-version-text');
-  const statusText = document.getElementById('electron-status-text');
+  const upgradeBtn = document.getElementById('electron-upgrade-btn');
+  const versionSelect = document.getElementById('electron-version-select');
+  const currentVersionSpan = document.getElementById('electron-current-version');
+  const appVersionSpan = document.getElementById('about-app-version-copy');
 
-  if (!checkBtn || !versionSelect) return;
+  if (!ipc) {
+    console.warn('[ELECTRON-UPDATER] IPC not available');
+    return;
+  }
+
+  // Check if app is packaged - if so, hide the entire Security Updates section
+  try {
+    const appInfo = await ipc.invoke('get-app-info');
+    console.log('[ELECTRON-UPDATER] App info:', appInfo);
+
+    if (appInfo && appInfo.isPackaged) {
+      console.log('[ELECTRON-UPDATER] Packaged build detected - hiding Security Updates section');
+      if (securityUpdatesSection) {
+        securityUpdatesSection.style.display = 'none';
+      }
+      return;
+    }
+
+    console.log('[ELECTRON-UPDATER] Development mode - showing Security Updates section');
+  } catch (err) {
+    console.error('[ELECTRON-UPDATER] Failed to get app info:', err);
+    // On error, hide the section to be safe
+    if (securityUpdatesSection) {
+      securityUpdatesSection.style.display = 'none';
+    }
+    return;
+  }
 
   let availableVersion = null;
   let currentVersion = null;
+  let isUpgrading = false;
 
+  // Get current app version
+  try {
+    const info = await window.aboutAPI?.getInfo();
+    if (info && appVersionSpan) {
+      appVersionSpan.textContent = info.appVersion || 'Unknown';
+    }
+  } catch (err) {
+    console.error('[ELECTRON-UPDATER] Failed to get app version:', err);
+  }
+
+  // Check for Electron updates
   const checkVersions = async () => {
-    try {
-      if (!ipc) {
-        showStatus('IPC not available');
-        return;
-      }
+    if (isUpgrading) return;
 
+    try {
       checkBtn.disabled = true;
-      loadingSpan.style.display = 'block';
-      versionInfo.style.display = 'none';
-      statusText.style.display = 'none';
-      statusText.textContent = '';
+      banner.style.display = 'block';
+      statusSpan.textContent = 'Checking for updates...';
+      detailsDiv.textContent = '';
+      progressDiv.style.display = 'none';
+      upgradeBtn.style.display = 'none';
+      banner.style.borderColor = 'rgba(123, 46, 255, 0.3)';
+      banner.style.background = 'rgba(123, 46, 255, 0.1)';
 
       const buildType = versionSelect.value;
       const result = await ipc.invoke('get-electron-versions', buildType);
 
       if (result.error) {
-        statusText.textContent = `Error: ${result.error}`;
-        statusText.style.display = 'block';
-        showStatus(`Failed to check versions: ${result.error}`);
+        statusSpan.textContent = 'Update check failed';
+        detailsDiv.textContent = result.error;
+        banner.style.borderColor = 'rgba(244, 67, 54, 0.5)';
+        banner.style.background = 'rgba(244, 67, 54, 0.1)';
+        showStatus(`Failed: ${result.error}`);
       } else {
         availableVersion = result.available;
         currentVersion = result.current;
-        
-        if (availableVersion) {
-          versionText.textContent = `Available: ${availableVersion} | Current: ${currentVersion}`;
-          versionInfo.style.display = 'block';
-          
-          // Enable upgrade button only if there's a newer version
-          const isNewer = compareVersions(availableVersion, currentVersion) > 0;
-          upgradeBtn.disabled = !isNewer;
-          upgradeBtn.style.display = 'block';
-          
-          if (isNewer) {
-            statusText.textContent = 'Update available!';
-            statusText.style.color = '#4CAF50';
-          } else {
-            statusText.textContent = 'You are running the latest version.';
-            statusText.style.color = '#888';
-          }
-          statusText.style.display = 'block';
-          showStatus(`Current: ${currentVersion} | Latest ${buildType}: ${availableVersion}`);
+
+        if (currentVersionSpan) {
+          currentVersionSpan.textContent = currentVersion || 'Unknown';
+        }
+
+        const isNewer = compareVersions(availableVersion, currentVersion) > 0;
+
+        if (isNewer) {
+          statusSpan.textContent = 'Security update available';
+          detailsDiv.textContent = `Electron ${availableVersion} is available (you have ${currentVersion}). This update includes security patches and performance improvements.`;
+          upgradeBtn.style.display = 'inline-block';
+          upgradeBtn.disabled = false;
+          banner.style.borderColor = 'rgba(76, 175, 80, 0.5)';
+          banner.style.background = 'rgba(76, 175, 80, 0.1)';
+          showStatus(`Update available: ${availableVersion}`);
+        } else {
+          statusSpan.textContent = 'Up to date';
+          detailsDiv.textContent = `You are running the latest ${buildType} version of Electron (${currentVersion}).`;
+          upgradeBtn.style.display = 'none';
+          banner.style.borderColor = 'rgba(100, 100, 100, 0.3)';
+          banner.style.background = 'rgba(100, 100, 100, 0.1)';
+          showStatus('Electron is up to date');
         }
       }
-
+    } catch (err) {
+      console.error('[ELECTRON-UPDATER] Check failed:', err);
+      statusSpan.textContent = 'Update check failed';
+      detailsDiv.textContent = err.message;
+      banner.style.borderColor = 'rgba(244, 67, 54, 0.5)';
+      banner.style.background = 'rgba(244, 67, 54, 0.1)';
+      showStatus('Check failed');
+    } finally {
       checkBtn.disabled = false;
-      loadingSpan.style.display = 'none';
-    } catch (error) {
-      console.error('Error checking versions:', error);
-      statusText.textContent = `Error: ${error.message}`;
-      statusText.style.display = 'block';
-      showStatus('Failed to check versions');
-      checkBtn.disabled = false;
-      loadingSpan.style.display = 'none';
     }
   };
 
+  // Install Electron update
   const handleUpgrade = async () => {
+    if (isUpgrading) return;
+
     const buildType = versionSelect.value;
     if (!availableVersion) {
-      showStatus('No version information available');
+      showStatus('No update available');
       return;
     }
 
     const confirmed = confirm(
-      `Upgrade Electron from ${currentVersion} to ${availableVersion} (${buildType})?\n\nThe application will restart automatically.`
+      `Update Electron from ${currentVersion} to ${availableVersion}?\n\nThis will download and install the ${buildType} version, then restart the application.\n\nThis process may take a few minutes.`
     );
 
     if (!confirmed) return;
 
     try {
+      isUpgrading = true;
       upgradeBtn.disabled = true;
       checkBtn.disabled = true;
       versionSelect.disabled = true;
-      statusText.textContent = 'Downloading and installing...';
-      statusText.style.color = '#FFC107';
-      statusText.style.display = 'block';
-      showStatus('Starting Electron upgrade...');
+
+      statusSpan.textContent = 'Installing update...';
+      detailsDiv.textContent = `Downloading and installing Electron ${availableVersion}. Please wait...`;
+      progressDiv.style.display = 'block';
+      banner.style.borderColor = 'rgba(255, 193, 7, 0.5)';
+      banner.style.background = 'rgba(255, 193, 7, 0.1)';
+      showStatus('Installing Electron update...');
 
       const result = await ipc.invoke('upgrade-electron', buildType);
 
       if (result.success) {
-        statusText.textContent = result.message;
-        statusText.style.color = '#4CAF50';
-        showStatus(result.message);
-        
-        // Restart the app after a short delay
+        statusSpan.textContent = 'Update installed';
+        detailsDiv.textContent = 'Electron has been updated successfully. The application will restart now.';
+        progressDiv.style.display = 'none';
+        banner.style.borderColor = 'rgba(76, 175, 80, 0.5)';
+        banner.style.background = 'rgba(76, 175, 80, 0.1)';
+        showStatus('Update complete - restarting...');
+
+        // Restart the app
         setTimeout(() => {
           if (ipc) {
-            ipc.invoke('restart-app').catch(err => console.error('Restart failed:', err));
+            ipc.invoke('restart-app').catch(err => {
+              console.error('Restart failed:', err);
+              showStatus('Please restart the app manually');
+            });
           }
-        }, 1500);
+        }, 2000);
       } else {
-        statusText.textContent = `Failed: ${result.error}`;
-        statusText.style.color = '#F44336';
-        showStatus(`Upgrade failed: ${result.error}`);
-        upgradeBtn.disabled = false;
-        checkBtn.disabled = false;
-        versionSelect.disabled = false;
+        throw new Error(result.error || 'Upgrade failed');
       }
-    } catch (error) {
-      console.error('Upgrade error:', error);
-      statusText.textContent = `Error: ${error.message}`;
-      statusText.style.color = '#F44336';
-      statusText.style.display = 'block';
-      showStatus(`Upgrade error: ${error.message}`);
+    } catch (err) {
+      console.error('[ELECTRON-UPDATER] Upgrade failed:', err);
+      statusSpan.textContent = 'Update failed';
+      detailsDiv.textContent = `Failed to install update: ${err.message}`;
+      progressDiv.style.display = 'none';
+      banner.style.borderColor = 'rgba(244, 67, 54, 0.5)';
+      banner.style.background = 'rgba(244, 67, 54, 0.1)';
+      showStatus(`Update failed: ${err.message}`);
+
+      isUpgrading = false;
       upgradeBtn.disabled = false;
       checkBtn.disabled = false;
       versionSelect.disabled = false;
     }
   };
 
-  checkBtn.addEventListener('click', checkVersions);
-  upgradeBtn.addEventListener('click', handleUpgrade);
-  
-  versionSelect.addEventListener('change', () => {
-    // Reset UI when build type changes
-    versionInfo.style.display = 'none';
-    upgradeBtn.style.display = 'none';
-    upgradeBtn.disabled = true;
-    statusText.style.display = 'none';
-    loadingSpan.style.display = 'block';
-    availableVersion = null;
-  });
-  
-  // Auto-refresh about tab and electron versions when this section comes into view
-  const aboutTabBtn = document.getElementById('tab-about');
-  if (aboutTabBtn) {
-    aboutTabBtn.addEventListener('click', () => {
-      setTimeout(() => {
-        // Refresh about info when About tab is clicked
-        populateAbout();
-        // Also refresh electron versions display
-        checkVersions();
-      }, 100);
+  // Wire up event handlers
+  if (checkBtn) {
+    checkBtn.addEventListener('click', checkVersions);
+  }
+
+  if (upgradeBtn) {
+    upgradeBtn.addEventListener('click', handleUpgrade);
+  }
+
+  if (versionSelect) {
+    versionSelect.addEventListener('change', () => {
+      // Reset UI when build type changes
+      banner.style.display = 'none';
+      upgradeBtn.style.display = 'none';
+      upgradeBtn.disabled = true;
+      availableVersion = null;
     });
   }
 }
+
 
 // Helper function to compare semantic versions
 function compareVersions(v1, v2) {

@@ -270,27 +270,45 @@
         </div>
 
         <div class="customization-group">
-          <h3>Electron Upgrade</h3>
+          <h3>Security Updates</h3>
+          <p class="note" style="margin-bottom: 12px;">Nebula Browser is distributed via Steam, but the Electron runtime can be updated separately for security patches and performance improvements.</p>
+
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <label for="electron-version-select" style="min-width: 100px;">Select Build:</label>
-              <select id="electron-version-select" style="flex: 1; padding: 8px; border-radius: 4px; background-color: var(--secondary, #00C6FF); color: var(--bg, #121418); border: none; cursor: pointer;">
-                <option value="stable">Stable</option>
-                <option value="nightly">Nightly</option>
-              </select>
-            </div>
-            <div id="electron-versions-container" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-              <span id="electron-loading" style="color: #888;">Loading available versions...</span>
-              <div id="electron-version-info" style="display: none;">
-                <span id="electron-version-text"></span>
+            <!-- Update Status Banner -->
+            <div id="electron-update-banner" style="display: none; padding: 12px; border-radius: 8px; background: rgba(123, 46, 255, 0.1); border: 1px solid rgba(123, 46, 255, 0.3);">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+                </svg>
+                <span id="electron-update-status" style="font-weight: 600;">Checking for updates...</span>
+              </div>
+              <div id="electron-update-details" style="font-size: 0.9em; opacity: 0.85; margin-bottom: 8px;"></div>
+              <div id="electron-update-progress" style="display: none; margin-bottom: 8px;">
+                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                  <div id="electron-update-progress-bar" style="width: 0%; height: 100%; background: var(--accent, #7B2EFF); transition: width 0.3s;"></div>
+                </div>
+                <div id="electron-update-progress-text" style="font-size: 0.85em; margin-top: 4px; opacity: 0.7;">Downloading and installing...</div>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button id="electron-upgrade-btn" style="display: none;">Install Update</button>
+                <button id="check-electron-versions">Check for Updates</button>
               </div>
             </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <button id="check-electron-versions">Check for Updates</button>
-              <button id="upgrade-electron-btn" style="display: none;" disabled>Upgrade Electron</button>
-              <span id="electron-status-text" style="display: none; color: #888; align-self: center;"></span>
+
+            <!-- Version Info -->
+            <div style="font-size: 0.9em; opacity: 0.8;">
+              <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                <label for="electron-version-select" style="min-width: 100px;">Update Channel:</label>
+                <select id="electron-version-select" style="flex: 1; padding: 8px; border-radius: 4px; background-color: var(--secondary, #00C6FF); color: var(--bg, #121418); border: none; cursor: pointer;">
+                  <option value="stable">Stable (Recommended)</option>
+                  <option value="nightly">Nightly (Latest Features)</option>
+                </select>
+              </div>
+              <div id="electron-version-info-text" style="margin-top: 8px;">
+                <p><strong>Current Electron:</strong> <span id="electron-current-version">Loading...</span></p>
+                <p><strong>Nebula Browser:</strong> <span id="about-app-version-copy">Loading...</span></p>
+              </div>
             </div>
-            <p class="note" style="margin-top: 8px;">Upgrading Electron will require the application to restart.</p>
           </div>
         </div>
 
