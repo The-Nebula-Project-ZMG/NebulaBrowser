@@ -22,7 +22,7 @@
     "steamworks.js": "^0.3.2"
   },
   "devDependencies": {
-    "electron": "^39.2.7",
+    "electron": "^40.0.0",
     "electron-builder": "^23.0.0",
     "electron-nightly": "^39.0.0-nightly.20250811"
   },

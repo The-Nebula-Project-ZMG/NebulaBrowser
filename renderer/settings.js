@@ -300,6 +300,56 @@ window.addEventListener('DOMContentLoaded', () => {
   initTabs();
 });
 
+// Apply current theme to settings page
+function applyCurrentThemeToSettings() {
+  if (!window.BrowserCustomizer) return;
+  
+  const savedTheme = localStorage.getItem('nebula-theme');
+  let theme = null;
+  
+  if (savedTheme) {
+    try {
+      theme = JSON.parse(savedTheme);
+    } catch (e) {
+      console.warn('Failed to parse saved theme', e);
+    }
+  }
+  
+  if (!theme || !theme.colors) return;
+  
+  // Apply theme colors to CSS variables
+  const root = document.documentElement;
+  root.style.setProperty('--bg', theme.colors.bg || '#121418');
+  root.style.setProperty('--gradient-end', theme.colors.darkPurple || '#1B1035');
+  root.style.setProperty('--primary', theme.colors.primary || '#7B2EFF');
+  root.style.setProperty('--accent', theme.colors.accent || '#00C6FF');
+  root.style.setProperty('--text', theme.colors.text || '#E0E0E0');
+  
+  // Update glow colors based on theme
+  const primaryRgb = hexToRgb(theme.colors.primary || '#7B2EFF');
+  if (primaryRgb) {
+    root.style.setProperty('--ring', `0 0 0 2px rgba(${primaryRgb.r}, ${primaryRgb.g}, ${primaryRgb.b}, 0.4)`);
+    root.style.setProperty('--glow-subtle', `0 4px 20px rgba(${primaryRgb.r}, ${primaryRgb.g}, ${primaryRgb.b}, 0.15)`);
+  }
+}
+
+// Helper to convert hex to RGB
+function hexToRgb(hex) {
+  const result = /^#?([a-f\\d]{2})([a-f\\d]{2})([a-f\\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
+}
+
+// Listen for theme changes
+window.addEventListener('storage', (e) => {
+  if (e.key === 'nebula-theme') {
+    applyCurrentThemeToSettings();
+  }
+});
+
 // About tab population
 async function populateAbout() {
   try {
@@ -356,6 +406,7 @@ async function populateAbout() {
 window.addEventListener('DOMContentLoaded', () => {
   populateAbout();
   setupElectronUpdater();
+  applyCurrentThemeToSettings();
 
   // Refresh about info when About tab is clicked
   const aboutTabBtn = document.getElementById('tab-about');

@@ -24,17 +24,20 @@
       <!-- General Panel -->
       <section class="tab-panel active" id="panel-general" role="tabpanel" aria-labelledby="tab-general">
         <h2>General</h2>
+        
         <div class="setting-group">
-          <label for="clear-data-btn">Clear All Cookies &amp; Data</label>
-          <button id="clear-data-btn">Clear Data</button>
+          <h3>Data Management</h3>
+          <p class="note">Clear all cookies, cache, and browsing data stored locally on this device.</p>
+          <div class="setting-row">
+            <button id="clear-data-btn">Clear All Data</button>
+          </div>
         </div>
-        <p class="note">Settings are stored locally on this device.</p>
 
         <!-- Big Picture Mode -->
         <div class="setting-group">
-          <h3>🎮 Big Picture Mode</h3>
+          <h3>Big Picture Mode</h3>
           <p class="note">A controller-friendly UI designed for Steam Deck and handheld devices.</p>
-          <div style="display: flex; align-items: center; gap: 12px; margin-top: 10px;">
+          <div class="setting-row">
             <button id="launch-bigpicture-btn" class="primary-btn">
               <span style="font-size: 18px;">🎮</span> Launch Big Picture Mode
             </button>
@@ -43,21 +46,25 @@
         </div>
 
         <div class="setting-group">
-          <h3>Weather</h3>
-          <fieldset class="weather-units" style="display:flex; flex-direction:column; gap:8px; border:1px solid rgba(255,255,255,0.15); padding:10px; border-radius:8px;">
-            <legend style="padding:0 6px; opacity:.85;">Temperature units</legend>
-            <label><input type="radio" name="weather-unit" id="weather-unit-auto" value="auto" checked> Auto (based on locale)</label>
-            <label><input type="radio" name="weather-unit" id="weather-unit-c" value="c"> Celsius (°C)</label>
-            <label><input type="radio" name="weather-unit" id="weather-unit-f" value="f"> Fahrenheit (°F)</label>
+          <h3>Weather Display</h3>
+          <p class="note">Choose how temperature is displayed on the Home page weather card.</p>
+          <fieldset class="weather-units settings-fieldset">
+            <legend>Temperature units</legend>
+            <label style="display: block; margin-bottom: 8px;"><input type="radio" name="weather-unit" id="weather-unit-auto" value="auto" checked> Auto (based on locale)</label>
+            <label style="display: block; margin-bottom: 8px;"><input type="radio" name="weather-unit" id="weather-unit-c" value="c"> Celsius (°C)</label>
+            <label style="display: block; margin-bottom: 8px;"><input type="radio" name="weather-unit" id="weather-unit-f" value="f"> Fahrenheit (°F)</label>
           </fieldset>
-          <p class="note">Affects the weather card on the Home page.</p>
         </div>
-        <div class="debug-info" id="debug-info">Loading debug info...</div>
+
+        <div class="setting-group">
+          <h3>System Information</h3>
+          <div class="debug-info" id="debug-info">Loading debug info...</div>
+        </div>
       </section>
 
       <!-- Appearance Panel -->
       <section class="tab-panel" id="panel-appearance" role="tabpanel" aria-labelledby="tab-appearance">
-        <h2>🎨 Appearance</h2>
+        <h2>Appearance</h2>
         <!-- Theme Selection -->
         <div class="customization-group">
           <h3>Theme Presets</h3>
@@ -120,12 +127,10 @@
         <!-- Display Scale -->
         <div class="customization-group">
           <h3>Display Scale</h3>
-          <div style="display: flex; flex-direction: column; gap: 12px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <input type="range" id="display-scale-slider" min="50" max="300" value="100" step="10" style="flex: 1; cursor: pointer;">
-              <span id="display-scale-value" style="min-width: 50px; text-align: right; font-weight: bold;">100%</span>
-            </div>
-            <p class="note">Adjust the default display scale (zoom) when opening the browser. Requires reload to take effect.</p>
+          <p class="note">Adjust the default zoom level when opening the browser. Changes require a reload to take effect.</p>
+          <div class="range-row">
+            <input type="range" id="display-scale-slider" min="50" max="300" value="100" step="10">
+            <span id="display-scale-value" class="range-value">100%</span>
           </div>
         </div>
 
@@ -214,7 +219,7 @@
         <div class="customization-group">
           <h3>Site History</h3>
           <ul id="site-history-list"></ul>
-          <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;">
+          <div class="button-row" style="margin-top:10px;">
             <button id="clear-site-history-btn">Clear Site History</button>
             <button id="add-test-history-btn">Add Test History</button>
           </div>
@@ -225,7 +230,7 @@
       <section class="tab-panel" id="panel-plugins" role="tabpanel" aria-labelledby="tab-plugins">
         <h2>Plugins</h2>
         <div class="customization-group">
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <div class="button-row">
             <button id="plugins-reload-all">Reload Plugins</button>
             <span class="note">Changes to renderer preloads may require app restart.</span>
           </div>
@@ -273,7 +278,7 @@
           <h3>Security Updates</h3>
           <p class="note" style="margin-bottom: 12px;">Nebula Browser is distributed via Steam, but the Electron runtime can be updated separately for security patches and performance improvements.</p>
 
-          <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="stack">
             <!-- Update Status Banner -->
             <div id="electron-update-banner" style="display: none; padding: 12px; border-radius: 8px; background: rgba(123, 46, 255, 0.1); border: 1px solid rgba(123, 46, 255, 0.3);">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
@@ -297,9 +302,9 @@
 
             <!-- Version Info -->
             <div style="font-size: 0.9em; opacity: 0.8;">
-              <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
-                <label for="electron-version-select" style="min-width: 100px;">Update Channel:</label>
-                <select id="electron-version-select" style="flex: 1; padding: 8px; border-radius: 4px; background-color: var(--secondary, #00C6FF); color: var(--bg, #121418); border: none; cursor: pointer;">
+              <div class="setting-row" style="margin-bottom: 8px;">
+                <label for="electron-version-select" class="label-min">Update Channel:</label>
+                <select id="electron-version-select">
                   <option value="stable">Stable (Recommended)</option>
                   <option value="nightly">Nightly (Latest Features)</option>
                 </select>
