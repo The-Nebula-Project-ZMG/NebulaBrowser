@@ -556,8 +556,15 @@ function findElementInDirection(direction) {
     y: currentRect.top + currentRect.height / 2
   };
   
+  // Detect if current element is in sidebar, header, or content area
+  const currentContainer = current.closest('.bp-sidebar, .bp-header, .bp-content, .osk-overlay, .sidebar, .content');
+  
+  // Special case: if on a tab link in settings and going down/right, prioritize active panel content
+  const isTabLink = current.classList.contains('tab-link') || current.closest('.tabs, .tab-link');
+  const isActiveTab = current.classList.contains('active');
+  
   let bestIndex = state.focusIndex;
-  let bestDistance = Infinity;
+  let bestScore = Infinity;
   
   state.focusableElements.forEach((element, index) => {
     if (element === current) return;
@@ -568,31 +575,70 @@ function findElementInDirection(direction) {
       y: rect.top + rect.height / 2
     };
     
+    // Detect element's container
+    const elementContainer = element.closest('.bp-sidebar, .bp-header, .bp-content, .osk-overlay, .sidebar, .content');
+    const sameContainer = currentContainer === elementContainer;
+    
+    // Check if element is in active tab panel
+    const inActivePanel = element.closest('.tab-panel.active');
+    
     // Check if element is in the correct direction
     let isValid = false;
+    let alignmentScore = 0;
+    let distanceInDirection = 0;
+    let distancePerpendicular = 0;
+    
     switch (direction) {
       case 'up':
         isValid = center.y < currentCenter.y - 10;
+        distanceInDirection = currentCenter.y - center.y;
+        distancePerpendicular = Math.abs(center.x - currentCenter.x);
+        // Prioritize elements in the same vertical column
+        alignmentScore = distancePerpendicular < 50 ? 0 : distancePerpendicular;
         break;
       case 'down':
         isValid = center.y > currentCenter.y + 10;
+        distanceInDirection = center.y - currentCenter.y;
+        distancePerpendicular = Math.abs(center.x - currentCenter.x);
+        // Prioritize elements in the same vertical column
+        alignmentScore = distancePerpendicular < 50 ? 0 : distancePerpendicular;
         break;
       case 'left':
         isValid = center.x < currentCenter.x - 10;
+        distanceInDirection = currentCenter.x - center.x;
+        distancePerpendicular = Math.abs(center.y - currentCenter.y);
+        // Prioritize elements in the same horizontal row
+        alignmentScore = distancePerpendicular < 50 ? 0 : distancePerpendicular;
         break;
       case 'right':
         isValid = center.x > currentCenter.x + 10;
+        distanceInDirection = center.x - currentCenter.x;
+        distancePerpendicular = Math.abs(center.y - currentCenter.y);
+        // Prioritize elements in the same horizontal row
+        alignmentScore = distancePerpendicular < 50 ? 0 : distancePerpendicular;
         break;
     }
     
     if (isValid) {
-      const distance = Math.sqrt(
-        Math.pow(center.x - currentCenter.x, 2) + 
-        Math.pow(center.y - currentCenter.y, 2)
-      );
+      // Calculate score - lower is better
+      // Heavily favor same container, then alignment, then distance
+      let score = distanceInDirection + alignmentScore * 3;
       
-      if (distance < bestDistance) {
-        bestDistance = distance;
+      // Special handling: if on active tab and going down/right, strongly prefer active panel content
+      if (isTabLink && isActiveTab && (direction === 'down' || direction === 'right')) {
+        if (inActivePanel) {
+          score = distanceInDirection * 0.1; // Extremely high priority for panel content
+        } else {
+          score += 5000; // Very large penalty for non-panel elements
+        }
+      }
+      // Otherwise, strong bonus for staying in same container (sidebar, content, etc.)
+      else if (!sameContainer) {
+        score += 2000; // Large penalty for leaving container
+      }
+      
+      if (score < bestScore) {
+        bestScore = score;
         bestIndex = index;
       }
     }
@@ -757,16 +803,56 @@ function pollGamepad() {
   requestAnimationFrame(pollGamepad);
 }
 
+function readDpadFromButtons(gamepad) {
+  const up = !!gamepad.buttons[12]?.pressed;
+  const down = !!gamepad.buttons[13]?.pressed;
+  const left = !!gamepad.buttons[14]?.pressed;
+  const right = !!gamepad.buttons[15]?.pressed;
+  return { up, down, left, right, active: up || down || left || right, source: 'buttons' };
+}
+
+function readDpadFromAxes(gamepad) {
+  const axes = gamepad.axes || [];
+  const candidates = [
+    { x: 6, y: 7 },
+    { x: 9, y: 10 },
+    { x: 4, y: 5 }
+  ];
+
+  for (const { x, y } of candidates) {
+    if (axes.length <= Math.max(x, y)) continue;
+    const ax = axes[x] || 0;
+    const ay = axes[y] || 0;
+    if (Math.abs(ax) > 0.5 || Math.abs(ay) > 0.5) {
+      return {
+        up: ay < -0.5,
+        down: ay > 0.5,
+        left: ax < -0.5,
+        right: ax > 0.5,
+        active: true,
+        source: 'axes'
+      };
+    }
+  }
+
+  return { up: false, down: false, left: false, right: false, active: false, source: 'axes' };
+}
+
 function handleGamepadInput(gamepad) {
   // D-pad and left stick for navigation
-  const leftX = gamepad.axes[0];
-  const leftY = gamepad.axes[1];
+  const leftX = gamepad.axes[0] || 0;
+  const leftY = gamepad.axes[1] || 0;
   
-  // D-pad buttons (indices may vary by controller)
-  const dpadUp = gamepad.buttons[12]?.pressed;
-  const dpadDown = gamepad.buttons[13]?.pressed;
-  const dpadLeft = gamepad.buttons[14]?.pressed;
-  const dpadRight = gamepad.buttons[15]?.pressed;
+  // D-pad buttons/axes (indices may vary by controller)
+  const buttonDpad = readDpadFromButtons(gamepad);
+  const axisDpad = readDpadFromAxes(gamepad);
+  const dpad = axisDpad.active && (!buttonDpad.active || gamepad.mapping !== 'standard')
+    ? axisDpad
+    : buttonDpad;
+  const dpadUp = dpad.up;
+  const dpadDown = dpad.down;
+  const dpadLeft = dpad.left;
+  const dpadRight = dpad.right;
   
   // Analog stick with deadzone
   const stickUp = leftY < -CONFIG.STICK_DEADZONE;

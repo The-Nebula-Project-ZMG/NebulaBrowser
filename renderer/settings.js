@@ -311,6 +311,30 @@ function activateTab(tabName) {
 
 function initTabs() {
   const links = document.querySelectorAll('.tab-link');
+
+  const getFocusableElements = (container) => {
+    if (!container) return [];
+    const selector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    return Array.from(container.querySelectorAll(selector))
+      .filter(el => !el.disabled && el.getAttribute('aria-hidden') !== 'true' && el.offsetParent !== null);
+  };
+
+  const focusFirstInActivePanel = () => {
+    const activePanel = document.querySelector('.tab-panel.active') || null;
+    const focusables = getFocusableElements(activePanel);
+    if (focusables.length > 0) {
+      focusables[0].focus({ preventScroll: true });
+      return true;
+    }
+    if (activePanel) {
+      if (!activePanel.hasAttribute('tabindex')) {
+        activePanel.setAttribute('tabindex', '-1');
+      }
+      activePanel.focus({ preventScroll: true });
+      return true;
+    }
+    return false;
+  };
   
   // Direct listeners (for accessibility focus handling)
   links.forEach((link, index) => {
@@ -323,6 +347,18 @@ function initTabs() {
         history.replaceState(null, '', `#${name}`);
       }
       activateTab(name);
+    });
+
+    // Controller/keyboard: move from tab to panel content
+    link.addEventListener('keydown', (e) => {
+      if (e.defaultPrevented) return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+        const moved = focusFirstInActivePanel();
+        if (moved) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
     });
   });
   
@@ -340,6 +376,24 @@ function initTabs() {
       activateTab(name);
     });
   }
+
+  // Global fallback: if focus is on sidebar tabs, move into active panel on down/right
+  document.addEventListener('keydown', (e) => {
+    if (e.defaultPrevented) return;
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowRight') return;
+
+    const activeEl = document.activeElement;
+    const inTabs = activeEl && (activeEl.classList?.contains('tab-link') || activeEl.closest?.('.tabs'));
+    const inSidebar = activeEl && activeEl.closest?.('.sidebar');
+
+    if (inTabs || inSidebar) {
+      const moved = focusFirstInActivePanel();
+      if (moved) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }
+  }, true);
 
   // Resolve initial tab: hash > storage > default 'general'
   let initial = (location.hash || '').replace('#', '') || null;
