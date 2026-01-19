@@ -22,6 +22,11 @@
       color: rgba(255, 255, 255, 0.5);
       /* Adjust the color and transparency as needed */
     }
+
+    #view-host {
+      flex: 1;
+      width: 100%;
+    }
   </style>
 </head>
 <body>
@@ -100,20 +105,7 @@
 
   </div>
 
-  <div id="webviews" class="hidden"></div>
-
-  <!-- Home page container for direct loading -->
-  <div id="home-container" class="active">
-    <webview id="home-webview"
-             src="home.html"
-             preload="../preload.js"
-             partition="persist:main"
-             allowpopups
-             webpreferences="allowRunningInsecureContent=false,javascript=true,webSecurity=true"
-             useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Nebula/1.0.0"
-             style="width:100%; height:100%; border:none;">
-    </webview>
-  </div>
+  <div id="view-host"></div>
 
   <script src="script.js"></script>
 </body>

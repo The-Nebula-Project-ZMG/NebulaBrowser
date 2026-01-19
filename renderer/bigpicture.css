@@ -240,7 +240,8 @@ body.mouse-active {
 }
 
 .bp-exit-btn:hover,
-.bp-exit-btn:focus {
+.bp-exit-btn:focus,
+.bp-exit-btn.focused {
   background: var(--bp-surface-hover);
   border-color: var(--bp-primary);
   box-shadow: var(--bp-focus-ring);
@@ -306,7 +307,8 @@ body.mouse-active {
   color: var(--bp-text);
 }
 
-.nav-item:focus {
+.nav-item:focus,
+.nav-item.focused {
   outline: none;
   background: var(--bp-surface-hover);
   border-color: var(--bp-primary);
@@ -314,7 +316,8 @@ body.mouse-active {
   color: var(--bp-text);
 }
 
-.nav-item:focus .material-symbols-outlined {
+.nav-item:focus .material-symbols-outlined,
+.nav-item.focused .material-symbols-outlined {
   transform: scale(1.1);
 }
 
@@ -449,7 +452,8 @@ body.mouse-active {
   border-color: var(--bp-text-dim);
 }
 
-.action-btn:focus {
+.action-btn:focus,
+.action-btn.focused {
   outline: none;
   border-color: var(--bp-primary);
   box-shadow: var(--bp-focus-ring);
@@ -461,7 +465,8 @@ body.mouse-active {
 }
 
 .action-btn.danger:hover,
-.action-btn.danger:focus {
+.action-btn.danger:focus,
+.action-btn.danger.focused {
   border-color: var(--bp-danger);
   color: var(--bp-danger);
 }
@@ -495,7 +500,8 @@ body.mouse-active {
 }
 
 .search-card:focus,
-.search-card:focus-within {
+.search-card:focus-within,
+.search-card.focused {
   outline: none;
   border-color: var(--bp-accent);
   box-shadow: var(--bp-focus-ring-accent);
@@ -599,14 +605,16 @@ body.mouse-active {
   opacity: 1;
 }
 
-.tile:focus {
+.tile:focus,
+.tile.focused {
   outline: none;
   border-color: var(--bp-primary);
   box-shadow: var(--bp-focus-ring);
   transform: scale(1.02);
 }
 
-.tile:focus::before {
+.tile:focus::before,
+.tile.focused::before {
   opacity: 1;
 }
 
@@ -671,13 +679,15 @@ body.mouse-active {
 }
 
 .tile.add-tile:hover,
-.tile.add-tile:focus {
+.tile.add-tile:focus,
+.tile.add-tile.focused {
   border-color: var(--bp-accent);
   border-style: solid;
 }
 
 .tile.add-tile:hover .material-symbols-outlined,
-.tile.add-tile:focus .material-symbols-outlined {
+.tile.add-tile:focus .material-symbols-outlined,
+.tile.add-tile.focused .material-symbols-outlined {
   color: var(--bp-accent);
 }
 
@@ -722,7 +732,8 @@ body.mouse-active {
   transform: translateY(-4px);
 }
 
-.scroll-card:focus {
+.scroll-card:focus,
+.scroll-card.focused {
   outline: none;
   border-color: var(--bp-primary);
   box-shadow: var(--bp-focus-ring);
@@ -795,7 +806,8 @@ body.mouse-active {
   background: var(--bp-surface-hover);
 }
 
-.list-item:focus {
+.list-item:focus,
+.list-item.focused {
   outline: none;
   border-color: var(--bp-primary);
   box-shadow: var(--bp-focus-ring);
@@ -910,7 +922,8 @@ body.mouse-active {
   transform: scale(1.02);
 }
 
-.nebot-card:focus {
+.nebot-card:focus,
+.nebot-card.focused {
   outline: none;
   border-color: var(--bp-accent);
   box-shadow: var(--bp-focus-ring-accent);
@@ -974,7 +987,8 @@ body.mouse-active {
   transform: scale(1.02);
 }
 
-.settings-card:focus {
+.settings-card:focus,
+.settings-card.focused {
   outline: none;
   border-color: var(--bp-primary);
   box-shadow: var(--bp-focus-ring);
@@ -1028,7 +1042,8 @@ body.mouse-active {
   color: var(--bp-text);
 }
 
-.settings-tab:focus {
+.settings-tab:focus,
+.settings-tab.focused {
   outline: none;
   border-color: var(--bp-primary);
   box-shadow: var(--bp-focus-ring);
@@ -1091,14 +1106,9 @@ body.mouse-active {
   transform: translateY(-2px);
 }
 
-.theme-card:focus {
-  outline: none;
-  border-color: var(--bp-primary);
-  box-shadow: var(--bp-focus-ring);
-  transform: translateY(-2px) scale(1.02);
-}
-
+.theme-card:focus,
 .theme-card.focused {
+  outline: none;
   border-color: var(--bp-primary);
   box-shadow: var(--bp-focus-ring);
   transform: translateY(-2px) scale(1.02);
@@ -1187,16 +1197,11 @@ body.mouse-active {
   border-color: var(--bp-primary);
 }
 
-.scale-btn:focus {
+.scale-btn:focus,
+.scale-btn.focused {
   outline: none;
   border-color: var(--bp-primary);
   box-shadow: var(--bp-focus-ring);
-}
-
-.scale-btn.focused {
-  border-color: var(--bp-primary);
-  box-shadow: var(--bp-focus-ring);
-  background: var(--bp-primary);
 }
 
 .scale-value {
@@ -1227,16 +1232,11 @@ body.mouse-active {
   border-color: var(--bp-primary);
 }
 
-.action-button:focus {
+.action-button:focus,
+.action-button.focused {
   outline: none;
   border-color: var(--bp-primary);
   box-shadow: var(--bp-focus-ring);
-}
-
-.action-button.focused {
-  border-color: var(--bp-primary);
-  box-shadow: var(--bp-focus-ring);
-  background: var(--bp-primary);
 }
 
 .action-button.danger:hover {
@@ -1500,7 +1500,8 @@ body.mouse-active {
 }
 
 .osk-close:hover,
-.osk-close:focus {
+.osk-close:focus,
+.osk-close.focused {
   background: var(--bp-danger);
   border-color: var(--bp-danger);
   outline: none;
@@ -1542,7 +1543,8 @@ body.mouse-active {
   transform: scale(1.05);
 }
 
-.osk-key:focus {
+.osk-key:focus,
+.osk-key.focused {
   outline: none;
   border-color: var(--bp-accent);
   box-shadow: 0 0 0 4px var(--bp-accent-glow), 0 0 20px var(--bp-accent-glow);
@@ -1592,7 +1594,8 @@ body.mouse-active {
 }
 
 .osk-action-btn:hover,
-.osk-action-btn:focus {
+.osk-action-btn:focus,
+.osk-action-btn.focused {
   background: var(--bp-surface-active);
   outline: none;
   border-color: var(--bp-accent);
@@ -1604,7 +1607,8 @@ body.mouse-active {
 }
 
 .osk-action-btn.primary:hover,
-.osk-action-btn.primary:focus {
+.osk-action-btn.primary:focus,
+.osk-action-btn.primary.focused {
   box-shadow: var(--bp-focus-ring);
 }
 
@@ -1676,7 +1680,8 @@ body.mouse-active {
   background: var(--bp-surface-hover);
 }
 
-.context-item:focus {
+.context-item:focus,
+.context-item.focused {
   outline: none;
   border-color: var(--bp-primary);
   background: var(--bp-surface-hover);
@@ -1688,7 +1693,8 @@ body.mouse-active {
 }
 
 /* Focus indicators for controller navigation */
-[data-focusable]:focus {
+[data-focusable]:focus,
+[data-focusable].focused {
   outline: none;
 }
 

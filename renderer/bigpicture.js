@@ -1912,10 +1912,15 @@ function navigateTo(url) {
   webview.style.width = '100%';
   webview.style.height = '100%';
   webview.style.border = 'none';
-  webview.preload = '../preload.js';
+  const preloadPath = window.electronAPI?.getWebviewPreloadPath?.();
+  if (preloadPath) {
+    webview.setAttribute('preload', preloadPath);
+  } else {
+    webview.setAttribute('preload', '../preload.js');
+  }
   webview.partition = 'persist:main';
   webview.allowpopups = true;
-  webview.webpreferences = 'allowRunningInsecureContent=false,javascript=true,webSecurity=true';
+  webview.setAttribute('webpreferences', 'allowRunningInsecureContent=false,javascript=true,webSecurity=true');
   
   container.appendChild(webview);
   state.currentWebview = webview;

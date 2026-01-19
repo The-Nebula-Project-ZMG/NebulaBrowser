@@ -268,9 +268,24 @@ function applyThemeToMainUI(theme) {
 // 1) cache hot DOM references
 const urlBox       = document.getElementById('url');
 const tabBarEl     = document.getElementById('tab-bar');
-const webviewsEl   = document.getElementById('webviews');
+const viewHostEl   = document.getElementById('view-host');
 const menuPopup    = document.getElementById('menu-popup');
 // (Removed old custom HTML context menu in favor of native Electron menu)
+
+function updateBrowserViewBounds() {
+  if (!viewHostEl) return;
+  const rect = viewHostEl.getBoundingClientRect();
+  ipcRenderer.invoke('browserview-set-bounds', {
+    x: rect.left,
+    y: rect.top,
+    width: rect.width,
+    height: rect.height
+  }).catch(() => {});
+}
+
+window.addEventListener('resize', () => {
+  updateBrowserViewBounds();
+});
 
 // Select all text on focus and prevent mouseup from deselecting
 urlBox.addEventListener('focus', () => {
@@ -430,6 +445,71 @@ ipcRenderer.on('open-url-new-tab', (url) => {
   if (typeof url === 'string' && url) createTab(url);
 });
 
+// Messages from BrowserView pages (sendToHost fallback)
+ipcRenderer.on('browserview-host-message', (payload) => {
+  console.log('[Renderer] browserview-host-message received:', payload);
+  const data = payload || {};
+  const channel = data.channel;
+  const args = data.args || [];
+  if (!channel) return;
+
+  if (channel === 'navigate' && args[0]) {
+    console.log('[Renderer] Navigating to:', args[0]);
+    const targetUrl = args[0];
+    const opts = args[1] || {};
+    try {
+      if (opts.insecureBypass && /^http:\/\//i.test(targetUrl)) {
+        const h = new URL(targetUrl).hostname;
+        insecureBypassedHosts.add(h);
+      }
+    } catch {}
+    if (opts.newTab) {
+      createTab(targetUrl);
+    } else {
+      urlBox.value = targetUrl;
+      navigate();
+    }
+  } else if (channel === 'theme-update' && args[0]) {
+    const theme = args[0];
+    applyThemeToMainUI(theme);
+    ipcRenderer.send('browserview-broadcast', { channel: 'theme-update', args: [theme] });
+  }
+});
+
+// Commands from the overlay menu window
+ipcRenderer.on('menu-command', (payload) => {
+  const cmd = payload?.cmd;
+  if (!cmd) return;
+  switch (cmd) {
+    case 'open-settings':
+      openSettings();
+      break;
+    case 'open-downloads':
+      openDownloads();
+      break;
+    case 'toggle-devtools':
+      window.electronAPI?.toggleDevTools?.();
+      break;
+    case 'big-picture':
+      window.bigPictureAPI?.launch?.();
+      break;
+    case 'zoom-in':
+      zoomIn();
+      break;
+    case 'zoom-out':
+      zoomOut();
+      break;
+    case 'hard-reload':
+      hardReload();
+      break;
+    case 'fresh-reload':
+      freshReload();
+      break;
+    default:
+      break;
+  }
+});
+
 // Auto-open on download start is disabled by design now.
 
 function createTab(inputUrl) {
@@ -442,172 +522,27 @@ function createTab(inputUrl) {
     pendingInternalNavigations.push(() => createTab(inputUrl));
     return id;
   }
-  
-  // Handle home page specially
-  if (inputUrl === 'nebula://home') {
-    // Show home container and hide webviews
-    const homeContainer = document.getElementById('home-container');
-    const webviewsEl = document.getElementById('webviews');
-    if (homeContainer) homeContainer.classList.add('active');
-    if (webviewsEl) webviewsEl.classList.add('hidden');
-    const tab = {
-        id,
-        url: inputUrl,
-        title: 'New Tab',
-        favicon: '',
-        history: [inputUrl],
-        historyIndex: 0,
-        isHome: true
-    };
-    tabs.push(tab);
-  setActiveTab(id);
-  // Render the tab bar so the new home tab appears
-  scheduleRenderTabs();
-    return id;
-  }
-  
-  // For all other URLs, use webview
   let resolvedUrl = resolveInternalUrl(inputUrl);
   console.log('[DEBUG] createTab resolvedUrl:', resolvedUrl, 'from inputUrl:', inputUrl);
-  // If it's a raw data: URL (image) keep as is; blob: will only resolve within its origin context (may fail)
-  // For very long data URLs we could embed them in a minimal viewer page for cleaner rendering.
-  if (resolvedUrl.startsWith('data:') && resolvedUrl.length > 4096) {
-    // Create a simple object URL page to avoid huge URL in the address bar (cannot easily persist across restarts).
-    const html = `<html><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;">`+
-      `<img src="${resolvedUrl}" style="max-width:100%;max-height:100%;object-fit:contain;"/>`+
-      `</body></html>`;
-    const blob = new Blob([html], { type: 'text/html' });
-    resolvedUrl = URL.createObjectURL(blob);
-  }
-  debug('[DEBUG] createTab() resolvedUrl =', resolvedUrl);
-
-  const webview = document.createElement('webview');
-  // give the webview an id and set its source and attributes so it actually loads and can be managed
-  webview.id = `tab-${id}`;
-  webview.src = resolvedUrl;
-  webview.setAttribute('allowpopups', '');
-  webview.setAttribute('partition', 'persist:main');
-  // Use absolute preload path provided by the main-window preload to ensure
-  // the guest process can resolve the file (important on Linux/SteamOS).
-  try {
-    const preloadPath = (window.electronAPI && typeof window.electronAPI.getWebviewPreloadPath === 'function')
-      ? window.electronAPI.getWebviewPreloadPath()
-      : '../preload.js';
-    webview.setAttribute('preload', preloadPath);
-  } catch (e) {
-    webview.setAttribute('preload', '../preload.js');
-  }
-  // Add attributes needed for Google OAuth and sign-in flows
-  webview.setAttribute('webpreferences', 'allowRunningInsecureContent=false,javascript=true,webSecurity=true');
-  try {
-    const baseUA = navigator.userAgent.includes('Nebula/') ? navigator.userAgent : navigator.userAgent + ' Nebula/1.0.0';
-    webview.setAttribute('useragent', baseUA);
-  } catch {
-    // fallback: let Electron supply default UA
-  }
-
-  webview.addEventListener('page-favicon-updated', e => {
-    if (e.favicons.length > 0) updateTabMetadata(id, 'favicon', e.favicons[0]);
-  });
-
-  // Send bookmarks to home page when it loads and apply scroll normalization
-  webview.addEventListener('dom-ready', () => {
-    // Apply scroll normalization to all sites for consistent scrolling
-    applyScrollNormalization(webview);
-    
-    if (inputUrl === 'nebula://home') {
-      webview.executeJavaScript(`
-        if (window.receiveBookmarks) {
-          window.receiveBookmarks(${JSON.stringify(bookmarks)});
-        } else {
-          // Store bookmarks for when the page script loads
-          window._pendingBookmarks = ${JSON.stringify(bookmarks)};
-        }
-      `);
-    }
-  });
-
-  // Consolidated navigation recording - only use did-navigate to avoid duplicates
-  webview.addEventListener('did-navigate', e => {
-    handleNavigation(id, e.url);
-    if (e.url.startsWith('http')) debug('[DEBUG] Recording navigation to:', e.url);
-    if (/\/cdn-cgi\//.test(e.url) || /challenge/i.test(e.url)) {
-      console.log('[Nebula] Cloudflare challenge detected at', e.url);
-    }
-  });
-  
-  webview.addEventListener('did-navigate-in-page', e => {
-    handleNavigation(id, e.url);
-    if (e.url.startsWith('http')) debug('[DEBUG] Recording in-page navigation to:', e.url);
-  });
-
-  // After load, just refresh nav buttons to avoid jank
-  webview.addEventListener('did-finish-load', () => {
-    scheduleUpdateNavButtons();
-  });
-  // Catch failed loads for diagnostics (e.g., http -> https transitions failing)
-  webview.addEventListener('did-fail-load', (e) => {
-    console.warn('[DEBUG] did-fail-load (createTab) id:', id, 'code:', e.errorCode, 'desc:', e.errorDescription, 'validatedURL:', e.validatedURL, 'isMainFrame:', e.isMainFrame);
-  });
-
-  // catch any target="_blank" or window.open() calls and open them as new tabs
-  webview.addEventListener('new-window', e => {
-    // Always open external http(s) targets in a new in-app tab instead of spawning
-    // a separate Electron BrowserWindow. (User request)
-    // If you need to allow real popup windows for specific OAuth flows later,
-    // introduce an allowlist check here before preventDefault().
-    if (e.url && /^https?:\/\//i.test(e.url)) {
-      e.preventDefault();
-      createTab(e.url);
-    } else {
-      // Block other scheme popups for safety (could extend with custom handling)
-      e.preventDefault();
-    }
-  });
-
-  // After creating dynamic webview:
-  webview.addEventListener('ipc-message', e => {
-    if (e.channel === 'navigate' && e.args[0]) {
-      const targetUrl = e.args[0];
-      const opts = e.args[1] || {};
-      // If user accepted insecure warning, record host to bypass for session
-      try {
-        if (opts.insecureBypass && /^http:\/\//i.test(targetUrl)) {
-          const h = new URL(targetUrl).hostname;
-          insecureBypassedHosts.add(h);
-        }
-      } catch {}
-      if (opts.newTab) {
-          createTab(targetUrl);
-      } else {
-        urlBox.value = targetUrl;
-        navigate();
-      }
-    } else if (e.channel === 'theme-update') {
-      const theme = e.args[0];
-      // Apply theme to main UI
-      applyThemeToMainUI(theme);
-      const home = document.getElementById('home-webview');
-      if (home) home.send('theme-update', theme);
-    }
-  });
-
-  // Ensure interacting with the webview closes any open menu popup
-  attachCloseMenuOnInteract(webview);
-
-  webviewsEl.appendChild(webview);
+  // Keep data: URLs intact; BrowserView cannot consume blob URLs created in the UI process.
 
   tabs.push({
     id,
-    url: inputUrl, // ← save the original input like "nebula://home"
+    url: inputUrl,
     title: 'New Tab',
     favicon: null,
     history: [inputUrl],
     historyIndex: 0
   });
 
-  setActiveTab(id);
+  ipcRenderer.invoke('browserview-create', { tabId: id, url: resolvedUrl })
+    .then(() => {
+      setActiveTab(id);
+      updateBrowserViewBounds();
+    })
+    .catch(() => {});
   scheduleRenderTabs();
+  return id;
 }
 
 // Expose for plugin usage (e.g., Nebot panel "Open Page")
@@ -645,13 +580,21 @@ function resolveInternalUrl(url) {
         console.log('[DEBUG] Resolved plugin page', page, '->', resolved);
         return resolved + suffix;
       }
-  // Fallback: built-in renderer copy (e.g., renderer/nebot.html)
+  // Fallback: built-in renderer copy (resolve to absolute file URL)
   console.log('[DEBUG] Using fallback for page:', page);
-      if (page === 'nebot') return 'nebot.html' + suffix;
-      return `${page}.html${suffix}`;
+      const rel = `${page}.html${suffix}`;
+      try {
+        return new URL(rel, window.location.href).toString();
+      } catch {
+        return rel;
+      }
     }
     console.log('[DEBUG] Page not in allowedInternalPages, returning 404');
-    return '404.html';
+    try {
+      return new URL('404.html', window.location.href).toString();
+    } catch {
+      return '404.html';
+    }
   }
   // Allow direct loading of common schemes without forcing https://
   if (/^(https?:|file:|data:|blob:)/i.test(url)) return url;
@@ -662,8 +605,11 @@ function resolveInternalUrl(url) {
 function handleLoadFail(tabId) {
   return (event) => {
     if (!event.validatedURL.includes('nebula://') && event.errorCode !== -3) {
-      const webview = document.getElementById(`tab-${tabId}`);
-      webview.src = `404.html?url=${encodeURIComponent(tabs.find(t => t.id === tabId).url)}`;
+      const badUrl = tabs.find(t => t.id === tabId)?.url || '';
+      ipcRenderer.invoke('browserview-load-url', {
+        tabId,
+        url: `404.html?url=${encodeURIComponent(badUrl)}`
+      }).catch(() => {});
     }
   };
 }
@@ -700,7 +646,7 @@ function performNavigation(input, originalInputForHistory) {
     resolved = resolveInternalUrl(input);
   }
 
-  console.log('[DEBUG] performNavigation input:', input, 'resolved:', resolved, 'tab.isHome:', tab.isHome, 'isInternal:', isInternal);
+  console.log('[DEBUG] performNavigation input:', input, 'resolved:', resolved, 'isInternal:', isInternal);
 
   // Intercept plain HTTP (not HTTPS) navigations (excluding localhost / 127.* / internal pages)
   try {
@@ -711,40 +657,12 @@ function performNavigation(input, originalInputForHistory) {
       if (!isLoopback && !insecureBypassedHosts.has(host)) {
         const encoded = encodeURIComponent(resolved);
         // Directly load insecure.html (avoid custom scheme so OS doesn't try to resolve an external handler)
-        const interstitial = `insecure.html?target=${encoded}`;
-        // For a fresh home tab, convert directly to webview showing the interstitial
-        if (tab.isHome) {
-          convertHomeTabToWebview(tab.id, originalInputForHistory, interstitial);
-          return;
-        }
-        // Navigate existing webview to interstitial instead
-        const webviewExisting = document.getElementById(`tab-${activeTabId}`);
-        if (webviewExisting) webviewExisting.src = interstitial;
-        tab.history = tab.history.slice(0, tab.historyIndex + 1);
-        tab.history.push(originalInputForHistory);
-        tab.historyIndex++;
-        tab.url = originalInputForHistory;
-        scheduleRenderTabs();
-        scheduleUpdateNavButtons();
-        return;
+        resolved = `insecure.html?target=${encoded}`;
       }
     }
   } catch (e) { debug('[DEBUG] HTTP interception error', e); }
 
-  if (tab.isHome && !isInternal) {
-    convertHomeTabToWebview(tab.id, originalInputForHistory, resolved);
-    return;
-  }
-
-  // If this is a home tab and we're navigating to an internal page, convert to webview
-  if (tab.isHome && isInternal) {
-    convertHomeTabToWebview(tab.id, originalInputForHistory, resolved);
-    return;
-  }
-
-  const webview = document.getElementById(`tab-${activeTabId}`);
-  if (!webview) {
-    console.log('[DEBUG] No webview found for tab', activeTabId, 'creating new tab instead');
+  if (!activeTabId) {
     createTab(input);
     return;
   }
@@ -752,7 +670,7 @@ function performNavigation(input, originalInputForHistory) {
   tab.history.push(originalInputForHistory);
   tab.historyIndex++;
   tab.url = originalInputForHistory;
-  webview.src = resolved;
+  ipcRenderer.invoke('browserview-load-url', { tabId: activeTabId, url: resolved }).catch(() => {});
   scheduleRenderTabs();
   scheduleUpdateNavButtons();
 }
@@ -786,113 +704,6 @@ document.addEventListener('keydown', async (e) => {
   }
 });
 
-function convertHomeTabToWebview(tabId, inputUrl, resolvedUrl) {
-  const tab = tabs.find(t => t.id === tabId);
-  if (!tab) return;
-
-  // Ensure webviews container is visible
-  const webviewsEl = document.getElementById('webviews');
-  if (webviewsEl) webviewsEl.classList.remove('hidden');
-  // Create a new webview for this tab
-  const webview = document.createElement('webview');
-  webview.id = `tab-${tabId}`;
-  webview.src = resolvedUrl;
-  webview.setAttribute('allowpopups', '');
-  webview.setAttribute('partition', 'persist:main');
-  try {
-    const preloadPath = (window.electronAPI && typeof window.electronAPI.getWebviewPreloadPath === 'function')
-      ? window.electronAPI.getWebviewPreloadPath()
-      : '../preload.js';
-    webview.setAttribute('preload', preloadPath);
-  } catch (e) {
-    webview.setAttribute('preload', '../preload.js');
-  }
-  // Add attributes needed for Google OAuth and sign-in flows
-  webview.setAttribute('webpreferences', 'allowRunningInsecureContent=false,javascript=true,webSecurity=true');
-  try {
-    const baseUA2 = navigator.userAgent.includes('Nebula/') ? navigator.userAgent : navigator.userAgent + ' Nebula/1.0.0';
-    webview.setAttribute('useragent', baseUA2);
-  } catch {}
-
-  // Add event listeners
-  webview.addEventListener('did-fail-load', handleLoadFail(tabId));
-  webview.addEventListener('page-title-updated', e => updateTabMetadata(tabId, 'title', e.title));
-  webview.addEventListener('page-favicon-updated', e => {
-    if (e.favicons.length > 0) updateTabMetadata(tabId, 'favicon', e.favicons[0]);
-  });
-
-  webview.addEventListener('did-navigate', e => {
-    handleNavigation(tabId, e.url);
-    if (/\/cdn-cgi\//.test(e.url) || /challenge/i.test(e.url)) {
-      console.log('[Nebula] Cloudflare challenge detected at', e.url);
-    }
-  });
-  webview.addEventListener('did-navigate-in-page', e => {
-    handleNavigation(tabId, e.url);
-  });
-  webview.addEventListener('did-finish-load', () => {
-    scheduleUpdateNavButtons();
-  });
-  
-  // Apply scroll normalization when webview is ready
-  webview.addEventListener('dom-ready', () => {
-    applyScrollNormalization(webview);
-  });
-
-  webview.addEventListener('new-window', e => {
-    // Unified behavior: always open http(s) targets in a new tab (no extra window)
-    if (e.url && /^https?:\/\//i.test(e.url)) {
-      e.preventDefault();
-      createTab(e.url);
-    } else {
-      e.preventDefault();
-    }
-  });
-
-  // After creating dynamic webview:
-  webview.addEventListener('ipc-message', e => {
-    if (e.channel === 'theme-update') {
-      const theme = e.args && e.args[0];
-      if (theme) applyThemeToMainUI(theme);
-      const home = document.getElementById('home-webview');
-      if (home) home.send('theme-update', ...e.args);
-    } else if (e.channel === 'navigate' && e.args[0]) {
-      const targetUrl = e.args[0];
-      const opts = e.args[1] || {};
-      try {
-        if (opts.insecureBypass && /^http:\/\//i.test(targetUrl)) {
-          const h = new URL(targetUrl).hostname;
-          insecureBypassedHosts.add(h);
-        }
-      } catch {}
-      urlBox.value = targetUrl;
-      navigate();
-    }
-  });
-
-  // Add webview to DOM
-  webviewsEl.appendChild(webview);
-
-  // Ensure interacting with the webview closes any open menu popup
-  attachCloseMenuOnInteract(webview);
-
-  // Update tab properties
-  tab.isHome = false;
-  tab.webview = webview;
-  tab.url = inputUrl;
-  // Keep existing history (including home) - the new URL will be added by handleNavigation when webview loads
-  // Don't modify historyIndex here - handleNavigation will handle it
-
-  // Hide home container and show webview
-  const homeContainer = document.getElementById('home-container');
-  if (homeContainer) homeContainer.classList.remove('active');
-  webview.classList.add('active');
-
-  scheduleUpdateNavButtons();
-  // Activate converted webview tab and update UI
-  setActiveTab(tabId);
-  scheduleRenderTabs();
-}
 
 function handleNavigation(tabId, newUrl) {
   const tab = tabs.find(t => t.id === tabId);
@@ -980,36 +791,16 @@ function handleNavigation(tabId, newUrl) {
 
 
 function setActiveTab(id) {
-  // hide all individual webviews
-  tabs.forEach(t => {
-    const w = document.getElementById(`tab-${t.id}`);
-    if (w) w.classList.remove('active');
-  });
-  // toggle containers
-  const homeContainer = document.getElementById('home-container');
-  const webviewsEl = document.getElementById('webviews');
+  activeTabId = id;
+  ipcRenderer.invoke('browserview-set-active', { tabId: id }).catch(() => {});
+  updateBrowserViewBounds();
 
   const tab = tabs.find(t => t.id === id);
   if (tab) {
-    if (tab.isHome) {
-      homeContainer.classList.add('active');
-      webviewsEl.classList.add('hidden');
-    } else {
-      if (homeContainer) homeContainer.classList.remove('active');
-      webviewsEl.classList.remove('hidden');
-      const activeWebview = document.getElementById(`tab-${id}`);
-      if (activeWebview) activeWebview.classList.add('active');
-    }
-  }
-
-  activeTabId = id;
-
-  if (tab) {
-    // If the tab URL represents the home page, keep the URL bar blank.
     urlBox.value = tab.url === 'nebula://home' ? '' : tab.url;
-  scheduleRenderTabs();
+    scheduleRenderTabs();
     updateNavButtons();
-    updateZoomUI();            // ← update zoom display for new active tab
+    updateZoomUI();
   }
 }
 
@@ -1025,9 +816,7 @@ function closeTab(id) {
       ? (tabs[idx - 1]?.id ?? tabs[idx + 1]?.id ?? tabs[0]?.id)
       : activeTabId;
     btn.addEventListener('animationend', () => {
-      // Remove webview
-      const w = document.getElementById(`tab-${id}`);
-      if (w) w.remove();
+      ipcRenderer.invoke('browserview-destroy', { tabId: id }).catch(() => {});
       // Remove from model
       tabs = tabs.filter(t => t.id !== id);
       // Choose a new active tab if needed
@@ -1039,8 +828,7 @@ function closeTab(id) {
     return;
   }
   // Fallback (no button rendered yet)
-  const w = document.getElementById(`tab-${id}`);
-  if (w) w.remove();
+  ipcRenderer.invoke('browserview-destroy', { tabId: id }).catch(() => {});
   tabs = tabs.filter(t => t.id !== id);
   if (id === activeTabId && tabs.length > 0) setActiveTab(tabs[0].id);
   scheduleRenderTabs();
@@ -1259,9 +1047,11 @@ function renderTabs() {
 
 // 1) handle URL sent by main for a detached window
 ipcRenderer.on('open-url', (url) => {
+  for (const t of tabs) {
+    ipcRenderer.invoke('browserview-destroy', { tabId: t.id }).catch(() => {});
+  }
   tabs = [];
   activeTabId = null;
-  webviewsEl.innerHTML = '';
   tabBarEl.innerHTML = '';
   if (typeof url === 'string' && url) createTab(url); else createTab();
 });
@@ -1274,40 +1064,9 @@ function goBack() {
   if (tab.historyIndex > 0) {
     tab.historyIndex--;
     const targetUrl = tab.history[tab.historyIndex];
-    
-    // Special handling for nebula://home - convert webview tab back to home tab
-    if (targetUrl === 'nebula://home') {
-      const homeContainer = document.getElementById('home-container');
-      const webviewsEl = document.getElementById('webviews');
-      const webview = document.getElementById(`tab-${activeTabId}`);
-      
-      // Remove the webview if it exists
-      if (webview) {
-        webview.remove();
-      }
-      
-      // Convert tab back to home tab
-      tab.isHome = true;
-      tab.url = targetUrl;
-      delete tab.webview;
-      
-      // Show home container
-      if (homeContainer) homeContainer.classList.add('active');
-      if (webviewsEl) webviewsEl.classList.add('hidden');
-      
-      urlBox.value = '';
-      scheduleRenderTabs();
-      scheduleUpdateNavButtons();
-      return;
-    }
-    
-    const webview = document.getElementById(`tab-${activeTabId}`);
-    if (webview) {
-      isHistoryNavigation = true; // Prevent adding to history during programmatic navigation
-      // Resolve internal URLs (nebula://) to actual file paths
-      const resolvedUrl = resolveInternalUrl(targetUrl);
-      webview.loadURL(resolvedUrl);
-    }
+    isHistoryNavigation = true;
+    const resolvedUrl = resolveInternalUrl(targetUrl);
+    ipcRenderer.invoke('browserview-load-url', { tabId: activeTabId, url: resolvedUrl }).catch(() => {});
   }
 }
 
@@ -1319,48 +1078,9 @@ function goForward() {
   if (tab.historyIndex < tab.history.length - 1) {
     tab.historyIndex++;
     const targetUrl = tab.history[tab.historyIndex];
-    
-    // Special handling for nebula://home - it doesn't use a webview
-    if (targetUrl === 'nebula://home') {
-      const homeContainer = document.getElementById('home-container');
-      const webviewsEl = document.getElementById('webviews');
-      const webview = document.getElementById(`tab-${activeTabId}`);
-      
-      // Remove the webview if it exists
-      if (webview) {
-        webview.remove();
-      }
-      
-      // Convert tab back to home tab
-      tab.isHome = true;
-      tab.url = targetUrl;
-      delete tab.webview;
-      
-      // Show home container
-      if (homeContainer) homeContainer.classList.add('active');
-      if (webviewsEl) webviewsEl.classList.add('hidden');
-      
-      urlBox.value = '';
-      scheduleRenderTabs();
-      scheduleUpdateNavButtons();
-      return;
-    }
-    
-    // Check if we're currently on home and need to create a webview
-    if (tab.isHome && targetUrl !== 'nebula://home') {
-      // We're going forward from home to a webview page
-      const resolvedUrl = resolveInternalUrl(targetUrl);
-      convertHomeTabToWebview(activeTabId, targetUrl, resolvedUrl);
-      return;
-    }
-    
-    const webview = document.getElementById(`tab-${activeTabId}`);
-    if (webview) {
-      isHistoryNavigation = true; // Prevent adding to history during programmatic navigation
-      // Resolve internal URLs (nebula://) to actual file paths
-      const resolvedUrl = resolveInternalUrl(targetUrl);
-      webview.loadURL(resolvedUrl);
-    }
+    isHistoryNavigation = true;
+    const resolvedUrl = resolveInternalUrl(targetUrl);
+    ipcRenderer.invoke('browserview-load-url', { tabId: activeTabId, url: resolvedUrl }).catch(() => {});
   }
 }
 
@@ -1376,35 +1096,29 @@ function updateNavButtons() {
 }
 
 function reload() {
-  const webview = document.getElementById(`tab-${activeTabId}`);
-  if (webview) {
-    webview.reload();
-  scheduleUpdateNavButtons();    // keep back/forward buttons in sync after a reload
-  }
+  if (!activeTabId) return;
+  ipcRenderer.invoke('browserview-reload', { tabId: activeTabId, ignoreCache: false }).catch(() => {});
+  scheduleUpdateNavButtons();
 }
 
 function hardReload() {
-  const webview = document.getElementById(`tab-${activeTabId}`);
-  if (webview && typeof webview.reloadIgnoringCache === 'function') {
-    webview.reloadIgnoringCache();
-    scheduleUpdateNavButtons();
-  } else if (webview) {
-    // Fallback
-    webview.reload();
-  }
+  if (!activeTabId) return;
+  ipcRenderer.invoke('browserview-reload', { tabId: activeTabId, ignoreCache: true }).catch(() => {});
+  scheduleUpdateNavButtons();
 }
 
 function freshReload() {
-  const webview = document.getElementById(`tab-${activeTabId}`);
-  if (!webview) return;
-  try {
-    const u = new URL(webview.getURL());
-    u.searchParams.set('_bust', Date.now().toString());
-    webview.src = u.toString();
-  } catch {
-    // If URL parsing fails (e.g., internal pages), fall back to hard reload
-    hardReload();
-  }
+  if (!activeTabId) return;
+  ipcRenderer.invoke('browserview-get-url', { tabId: activeTabId }).then((currentUrl) => {
+    if (!currentUrl) return hardReload();
+    try {
+      const u = new URL(currentUrl);
+      u.searchParams.set('_bust', Date.now().toString());
+      ipcRenderer.invoke('browserview-load-url', { tabId: activeTabId, url: u.toString() }).catch(() => {});
+    } catch {
+      hardReload();
+    }
+  });
 }
 
 // Function to open the Settings page
@@ -1431,47 +1145,63 @@ let ringSvgEl = null;
 // Open/close on button click; stop propagation so outside-click handler doesn't immediately close it
 menuBtn.addEventListener('click', (e) => {
   e.stopPropagation();
-  menuPopup.classList.toggle('hidden');
-  if (!menuPopup.classList.contains('hidden')) {
-    updateZoomUI();          // ← refresh zoom % whenever menu opens
-  }
-});
-
-// Prevent clicks inside the popup from bubbling to the document
-if (menuPopup) {
-  menuPopup.addEventListener('click', (e) => e.stopPropagation());
-}
-
-// Close when clicking anywhere outside the menu wrapper
-document.addEventListener('click', (e) => {
-  if (!menuPopup || menuPopup.classList.contains('hidden')) return;
-  if (menuWrapper && !menuWrapper.contains(e.target)) {
-    menuPopup.classList.add('hidden');
-  }
+  if (!menuBtn) return;
+  const rect = menuBtn.getBoundingClientRect();
+  const theme = currentThemeColors ? { colors: currentThemeColors } : null;
+  ipcRenderer.send('menu-popup-toggle', {
+    anchorRect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+    theme
+  });
 });
 
 // Close on Escape key
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && menuPopup && !menuPopup.classList.contains('hidden')) {
-    menuPopup.classList.add('hidden');
-  }
+  if (e.key === 'Escape') ipcRenderer.send('menu-popup-hide');
   if (e.key === 'Escape' && downloadsPopupEl && !downloadsPopupEl.classList.contains('hidden')) {
     hideDownloadsPopup();
   }
 });
 
-// Also close when interacting with main content areas (covers webview clicks)
-const homeContainerEl = document.getElementById('home-container');
-if (webviewsEl) {
-  webviewsEl.addEventListener('pointerdown', () => {
-    if (!menuPopup.classList.contains('hidden')) menuPopup.classList.add('hidden');
-  });
-}
-if (homeContainerEl) {
-  homeContainerEl.addEventListener('pointerdown', () => {
-    if (!menuPopup.classList.contains('hidden')) menuPopup.classList.add('hidden');
-  });
-}
+// Close menus when BrowserView receives focus
+ipcRenderer.on('browserview-event', (payload) => {
+  if (!payload || !payload.type) return;
+  const { tabId, type } = payload;
+  if (type === 'focus') {
+    ipcRenderer.send('menu-popup-hide');
+    if (downloadsPopupEl && !downloadsPopupEl.classList.contains('hidden')) hideDownloadsPopup();
+    return;
+  }
+  if (type === 'page-title-updated') {
+    updateTabMetadata(tabId, 'title', payload.title);
+    return;
+  }
+  if (type === 'page-favicon-updated') {
+    const fav = payload.favicons?.[0];
+    if (fav) updateTabMetadata(tabId, 'favicon', fav);
+    return;
+  }
+  if (type === 'did-navigate' || type === 'did-navigate-in-page') {
+    if (payload.url) {
+      handleNavigation(tabId, payload.url);
+      if (/\/cdn-cgi\//.test(payload.url) || /challenge/i.test(payload.url)) {
+        console.log('[Nebula] Cloudflare challenge detected at', payload.url);
+      }
+    }
+    return;
+  }
+  if (type === 'did-finish-load') {
+    scheduleUpdateNavButtons();
+    return;
+  }
+  if (type === 'did-fail-load') {
+    handleLoadFail(tabId)({
+      validatedURL: payload.validatedURL || '',
+      errorCode: payload.errorCode,
+      errorDescription: payload.errorDescription,
+      isMainFrame: payload.isMainFrame
+    });
+  }
+});
 
 window.addEventListener('DOMContentLoaded', () => {
   // Initialize theme from localStorage
@@ -1480,18 +1210,7 @@ window.addEventListener('DOMContentLoaded', () => {
     try {
       const theme = JSON.parse(savedTheme);
       applyThemeToMainUI(theme);
-      // Also send to home-webview once it's ready
-      const homeWebview = document.getElementById('home-webview');
-      if (homeWebview) {
-        const sendThemeToHome = () => {
-          try { homeWebview.send('theme-update', theme); } catch {}
-        };
-        // If already loaded, send immediately; otherwise wait for dom-ready
-        if (homeWebview.getWebContentsId) {
-          sendThemeToHome();
-        }
-        homeWebview.addEventListener('dom-ready', sendThemeToHome, { once: true });
-      }
+      ipcRenderer.send('browserview-broadcast', { channel: 'theme-update', args: [theme] });
     } catch (err) {
       console.error('Error applying saved theme:', err);
     }
@@ -1517,43 +1236,7 @@ window.addEventListener('DOMContentLoaded', () => {
   
   // Initial boot
   createTab();
-  // Handle IPC messages from the static home webview (bookmarks navigation)
-  const staticHome = document.getElementById('home-webview');
-  if (staticHome) {
-  // Close menu when interacting with the home webview
-  attachCloseMenuOnInteract(staticHome);
-    staticHome.addEventListener('ipc-message', (e) => {
-      if (e.channel === 'navigate' && e.args[0]) {
-        urlBox.value = e.args[0];
-        navigate();
-      }
-    });
-  }
-  // Listen for IPC messages from other webviews (e.g., settings)
-  webviewsEl.addEventListener('ipc-message', (e) => {
-    // Navigation messages from home or other pages
-    if (e.channel === 'navigate' && e.args[0]) {
-      const targetUrl = e.args[0];
-      const opts = e.args[1] || {};
-      if (opts.newTab) {
-        // Open in a new tab, leaving settings/home intact
-        createTab(targetUrl);
-      } else {
-        urlBox.value = targetUrl;
-        navigate();
-      }
-    }
-    // Theme update from settings webview
-    if (e.channel === 'theme-update' && e.args[0]) {
-      const theme = e.args[0];
-      // Apply theme colors to the main renderer
-      applyThemeToMainUI(theme);
-      const homeWebview = document.getElementById('home-webview');
-      if (homeWebview) {
-        homeWebview.send('theme-update', theme);
-      }
-    }
-  });
+  updateBrowserViewBounds();
   // Fallback: listen for postMessage navigations from embedded pages (home/settings)
   window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'navigate' && event.data.url) {
@@ -1593,8 +1276,8 @@ window.addEventListener('DOMContentLoaded', () => {
     bigPictureBtn.addEventListener('click', async () => {
       try {
         await window.bigPictureAPI.launch();
-        // Close the menu popup
-        if (menuPopup) menuPopup.classList.add('hidden');
+        // Close the overlay menu
+        ipcRenderer.send('menu-popup-hide');
       } catch (e) {
         console.error('Failed to launch Big Picture Mode:', e);
       }
@@ -1779,9 +1462,7 @@ try {
 function attachCloseMenuOnInteract(el) {
   if (!el) return;
   const closeIfOpen = () => {
-    if (menuPopup && !menuPopup.classList.contains('hidden')) {
-      menuPopup.classList.add('hidden');
-    }
+    ipcRenderer.send('menu-popup-hide');
     if (downloadsPopupEl && !downloadsPopupEl.classList.contains('hidden')) {
       hideDownloadsPopup();
     }
@@ -1830,9 +1511,9 @@ window.addEventListener('nebula-context-command', (e) => {
       }
       // For blob: URLs we need to resolve inside the active webview by converting to dataURL
       if (url.startsWith('blob:')) {
-        const webview = document.getElementById(`tab-${activeTabId}`);
-        if (webview) {
-          webview.executeJavaScript(`(async()=>{try{const r=await fetch('${url}');const b=await r.blob();return new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});}catch(e){return null;}})();`).then(dataUrl=>{
+        if (activeTabId) {
+          const code = `(async()=>{try{const r=await fetch('${url}');const b=await r.blob();return new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});}catch(e){return null;}})();`;
+          ipcRenderer.invoke('browserview-execute-js', { tabId: activeTabId, code }).then(dataUrl => {
             if (dataUrl) {
               window.electronAPI.saveImageToDisk('image', dataUrl);
             }

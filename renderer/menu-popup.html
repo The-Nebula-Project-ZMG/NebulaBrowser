@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Menu</title>
+  <link rel="stylesheet" href="menu-popup.css" />
+</head>
+<body>
+  <div id="menu-popup" role="menu">
+    <button data-cmd="open-settings" role="menuitem">Settings</button>
+    <button data-cmd="big-picture" role="menuitem">🎮 Big Picture Mode</button>
+    <button data-cmd="toggle-devtools" role="menuitem">Toggle Developer Tools</button>
+    <div class="zoom-controls" role="group" aria-label="Zoom controls">
+      <button data-cmd="zoom-out" aria-label="Zoom out">-</button>
+      <span id="zoom-percent">100%</span>
+      <button data-cmd="zoom-in" aria-label="Zoom in">+</button>
+    </div>
+    <button data-cmd="hard-reload" role="menuitem">Hard Reload (Ignore Cache)</button>
+    <button data-cmd="fresh-reload" role="menuitem">Reload Fresh (Add Cache-Buster)</button>
+  </div>
+  <script src="menu-popup.js"></script>
+</body>
+</html>

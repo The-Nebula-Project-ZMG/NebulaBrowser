@@ -1,0 +1,66 @@
+:root {
+  --bg: #0b0d10;
+  --primary: #7b2eff;
+  --accent: #00c6ff;
+  --text: #e0e0e0;
+  --url-bar-bg: #1c2030;
+  --url-bar-border: #3e4652;
+  --shadow-1: 0 12px 30px rgba(0, 0, 0, 0.35);
+  --blur: 12px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+#menu-popup {
+  background: color-mix(in srgb, var(--url-bar-bg) 92%, var(--text) 8%);
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, color-mix(in srgb, var(--accent) 18%, transparent));
+  border-radius: 14px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  box-shadow: var(--shadow-1);
+  -webkit-backdrop-filter: blur(var(--blur));
+  backdrop-filter: blur(var(--blur));
+}
+
+#menu-popup button {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 120ms ease, filter 120ms ease;
+}
+
+#menu-popup button:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+}
+
+.zoom-controls button {
+  width: 28px;
+  height: 28px;
+  text-align: center;
+}
+
+#zoom-percent {
+  min-width: 54px;
+  text-align: center;
+}

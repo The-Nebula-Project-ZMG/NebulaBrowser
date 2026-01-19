@@ -127,7 +127,7 @@ function initializeSteamworks() {
 // This is critical for Steam Input to recognize native controller support
 initializeSteamworks();
 
-const { app, BrowserWindow, ipcMain, session, screen, shell, dialog, Menu, clipboard, webContents } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, session, screen, shell, dialog, Menu, clipboard, webContents } = require('electron');
 
 // Cleanup Steam callback pump on exit
 app.once('before-quit', () => {
@@ -156,6 +156,308 @@ const perfMonitor = new PerformanceMonitor();
 const gpuFallback = new GPUFallback();
 const gpuConfig = new GPUConfig();
 const pluginManager = new PluginManager();
+
+// =============================================================================
+// DESKTOP MODE: BrowserView tab management
+// =============================================================================
+const desktopViewStateByWindowId = new Map();
+const desktopViewByWebContentsId = new Map();
+const menuPopupByWindowId = new Map();
+const MENU_POPUP_SIZE = { width: 240, height: 240 };
+
+const SCROLL_NORMALIZATION_CSS = `
+  *, *::before, *::after { scroll-behavior: auto !important; }
+  html, body { scroll-behavior: auto !important; }
+`;
+
+const SCROLL_NORMALIZATION_JS = `
+(function() {
+  if (window.__nebulaScrollNormalized) return;
+  window.__nebulaScrollNormalized = true;
+  const SCROLL_SPEED = 100;
+  document.addEventListener('wheel', function(e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    let target = e.target;
+    let scrollable = null;
+    while (target && target !== document.body && target !== document.documentElement) {
+      const style = window.getComputedStyle(target);
+      const overflowY = style.overflowY;
+      const overflowX = style.overflowX;
+      if ((overflowY === 'auto' || overflowY === 'scroll') && target.scrollHeight > target.clientHeight) { scrollable = target; break; }
+      if ((overflowX === 'auto' || overflowX === 'scroll') && target.scrollWidth > target.clientWidth && e.shiftKey) { scrollable = target; break; }
+      target = target.parentElement;
+    }
+    if (!scrollable) scrollable = document.scrollingElement || document.documentElement || document.body;
+    let deltaY = e.deltaY;
+    let deltaX = e.deltaX;
+    if (e.deltaMode === 1) {
+      deltaY *= SCROLL_SPEED; deltaX *= SCROLL_SPEED;
+    } else if (e.deltaMode === 2) {
+      deltaY *= window.innerHeight; deltaX *= window.innerWidth;
+    } else {
+      const sign = deltaY > 0 ? 1 : -1;
+      deltaY = sign * Math.min(Math.abs(deltaY), SCROLL_SPEED * 3);
+      const signX = deltaX > 0 ? 1 : -1;
+      deltaX = signX * Math.min(Math.abs(deltaX), SCROLL_SPEED * 3);
+    }
+    e.preventDefault();
+    scrollable.scrollBy({ top: deltaY, left: e.shiftKey ? deltaX : 0, behavior: 'auto' });
+  }, { passive: false, capture: true });
+})();
+`;
+
+function getDesktopViewState(win) {
+  if (!win) return null;
+  let state = desktopViewStateByWindowId.get(win.id);
+  if (!state) {
+    state = {
+      views: new Map(), // tabId -> BrowserView
+      activeTabId: null,
+      bounds: null
+    };
+    desktopViewStateByWindowId.set(win.id, state);
+  }
+  return state;
+}
+
+function createMenuPopupWindow(parentWin) {
+  const menuWin = new BrowserWindow({
+    parent: parentWin,
+    modal: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    show: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    focusable: true,
+    hasShadow: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
+      partition: 'persist:main'
+    }
+  });
+
+  menuWin.setMenu(null);
+  try { menuWin.setAlwaysOnTop(true, 'pop-up-menu'); } catch {}
+
+  const hideMenu = () => {
+    if (!menuWin.isDestroyed()) menuWin.hide();
+  };
+
+  menuWin.on('blur', hideMenu);
+  parentWin.on('move', hideMenu);
+  parentWin.on('resize', hideMenu);
+
+  menuWin.on('closed', () => {
+    try { menuPopupByWindowId.delete(parentWin.id); } catch {}
+    try { parentWin.removeListener('move', hideMenu); } catch {}
+    try { parentWin.removeListener('resize', hideMenu); } catch {}
+  });
+
+  menuWin.loadFile(path.join(__dirname, 'renderer', 'menu-popup.html'));
+  return menuWin;
+}
+
+function positionMenuPopup(parentWin, menuWin, anchorRect) {
+  if (!parentWin || !menuWin || !anchorRect) return;
+  const contentBounds = parentWin.getContentBounds();
+  const display = screen.getDisplayMatching(contentBounds);
+  const workArea = display?.workArea || contentBounds;
+
+  const width = MENU_POPUP_SIZE.width;
+  const height = MENU_POPUP_SIZE.height;
+  let x = Math.round(contentBounds.x + anchorRect.x + anchorRect.width - width);
+  let y = Math.round(contentBounds.y + anchorRect.y + anchorRect.height + 6);
+
+  if (x < workArea.x) x = workArea.x;
+  if (y < workArea.y) y = workArea.y;
+  if (x + width > workArea.x + workArea.width) x = workArea.x + workArea.width - width;
+  if (y + height > workArea.y + workArea.height) y = workArea.y + workArea.height - height;
+
+  menuWin.setBounds({ x, y, width, height }, false);
+}
+
+function getOwnerWindowForContents(contents) {
+  if (!contents) return null;
+  try {
+    if (contents.hostWebContents) {
+      return BrowserWindow.fromWebContents(contents.hostWebContents);
+    }
+  } catch {}
+  try {
+    const maybeWin = BrowserWindow.fromWebContents(contents);
+    if (maybeWin) return maybeWin;
+  } catch {}
+  const mapped = desktopViewByWebContentsId.get(contents.id);
+  return mapped?.win || null;
+}
+
+function getActiveDesktopViewWebContents(win) {
+  const state = getDesktopViewState(win);
+  if (!state || !state.activeTabId) return null;
+  const view = state.views.get(state.activeTabId);
+  return view?.webContents || null;
+}
+
+function sendBrowserViewEvent(win, payload) {
+  try {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('browserview-event', payload);
+    }
+  } catch {}
+}
+
+function createBrowserViewForTab(win, tabId, url) {
+  const state = getDesktopViewState(win);
+  if (!state) return null;
+  if (state.views.has(tabId)) return state.views.get(tabId);
+
+  const view = new BrowserView({
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      partition: 'persist:main',
+      sandbox: false,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      nativeWindowOpen: false,
+      additionalArguments: [`--nebula-tab-id=${tabId}`]
+    }
+  });
+
+  try {
+    if (!process.env.NEBULA_DEBUG_ELECTRON_UA) {
+      view.webContents.setUserAgent(app.userAgentFallback || computeBaseUA());
+    }
+  } catch {}
+
+  state.views.set(tabId, view);
+  desktopViewByWebContentsId.set(view.webContents.id, { win, tabId, view });
+
+  view.webContents.on('page-title-updated', (_e, title) => {
+    sendBrowserViewEvent(win, { tabId, type: 'page-title-updated', title });
+  });
+
+  view.webContents.on('destroyed', () => {
+    try { desktopViewByWebContentsId.delete(view.webContents.id); } catch {}
+    try { state.views.delete(tabId); } catch {}
+    if (state.activeTabId === tabId) state.activeTabId = null;
+  });
+
+  view.webContents.on('page-favicon-updated', (_e, favicons) => {
+    sendBrowserViewEvent(win, { tabId, type: 'page-favicon-updated', favicons });
+  });
+
+  view.webContents.on('did-navigate', (_e, url) => {
+    sendBrowserViewEvent(win, { tabId, type: 'did-navigate', url });
+  });
+
+  view.webContents.on('did-navigate-in-page', (_e, url) => {
+    sendBrowserViewEvent(win, { tabId, type: 'did-navigate-in-page', url });
+  });
+
+  view.webContents.on('did-finish-load', () => {
+    sendBrowserViewEvent(win, { tabId, type: 'did-finish-load' });
+  });
+
+  view.webContents.on('did-fail-load', (_e, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    sendBrowserViewEvent(win, {
+      tabId,
+      type: 'did-fail-load',
+      errorCode,
+      errorDescription,
+      validatedURL,
+      isMainFrame
+    });
+  });
+
+  view.webContents.on('dom-ready', () => {
+    try { view.webContents.insertCSS(SCROLL_NORMALIZATION_CSS); } catch {}
+    try { view.webContents.executeJavaScript(SCROLL_NORMALIZATION_JS, true); } catch {}
+    sendBrowserViewEvent(win, { tabId, type: 'dom-ready' });
+  });
+
+  view.webContents.on('focus', () => {
+    sendBrowserViewEvent(win, { tabId, type: 'focus' });
+  });
+
+  // Route window.open() calls to tabs unless OAuth allowlist matched
+  view.webContents.setWindowOpenHandler((details) => {
+    const { url: targetUrl } = details;
+    if (!/^https?:\/\//i.test(targetUrl)) return { action: 'deny' };
+    const oauthDomains = [
+      'accounts.google.com',
+      'login.microsoftonline.com',
+      'appleid.apple.com',
+      'github.com/login',
+      'auth0.com',
+      'okta.com',
+      'login.live.com',
+      'facebook.com/dialog',
+      'api.twitter.com/oauth',
+      'discord.com/oauth2'
+    ];
+    const isOAuthDomain = oauthDomains.some(domain => targetUrl.toLowerCase().includes(domain.toLowerCase()));
+    if (isOAuthDomain) return { action: 'allow' };
+    try { win.webContents.send('open-url-new-tab', targetUrl); } catch {}
+    return { action: 'deny' };
+  });
+
+  if (url) {
+    try { view.webContents.loadURL(url); } catch {}
+  }
+
+  return view;
+}
+
+function setActiveBrowserView(win, tabId) {
+  const state = getDesktopViewState(win);
+  if (!state) return null;
+  const view = state.views.get(tabId);
+  if (!view) return null;
+
+  state.activeTabId = tabId;
+  try {
+    win.setBrowserView(view);
+    if (state.bounds) {
+      view.setBounds(state.bounds);
+    }
+    view.setAutoResize({ width: true, height: true });
+    view.webContents.focus();
+  } catch {}
+  return view;
+}
+
+function destroyBrowserView(win, tabId) {
+  const state = getDesktopViewState(win);
+  if (!state) return false;
+  const view = state.views.get(tabId);
+  if (!view) return false;
+  try {
+    if (state.activeTabId === tabId) {
+      try { win.setBrowserView(null); } catch {}
+      state.activeTabId = null;
+    }
+    state.views.delete(tabId);
+    desktopViewByWebContentsId.delete(view.webContents.id);
+    try { view.webContents.destroy(); } catch {}
+  } catch {}
+  return true;
+}
+
+function getZoomTargetForEvent(event) {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return null;
+  if (win.__nebulaMode === 'desktop') {
+    return getActiveDesktopViewWebContents(win) || win.webContents;
+  }
+  return win.webContents;
+}
 
 // Initialize portable data paths BEFORE app.ready (must be done early)
 // This enables portable mode on all platforms (Windows, macOS, Linux)
@@ -369,7 +671,10 @@ function getScreenInfo() {
  */
 function launchBigPictureMode() {
   const windows = BrowserWindow.getAllWindows();
-  const mainWindow = windows[0];
+  // Prefer the top-level app window (menu popup is a child window)
+  const mainWindow = windows.find(w => {
+    try { return w && !w.isDestroyed() && !w.getParentWindow(); } catch { return false; }
+  });
   
   if (!mainWindow || mainWindow.isDestroyed()) {
     console.warn('[BigPicture] No main window available');
@@ -383,6 +688,10 @@ function launchBigPictureMode() {
   }
   
   isInBigPictureMode = true;
+
+  // Switch mode and ensure any active BrowserView is detached so it can't cover the UI.
+  try { mainWindow.__nebulaMode = 'bigpicture'; } catch {}
+  try { mainWindow.setBrowserView(null); } catch {}
   
   // Enter fullscreen for Big Picture experience
   mainWindow.setFullScreen(true);
@@ -400,7 +709,10 @@ function launchBigPictureMode() {
  */
 function exitBigPictureMode() {
   const windows = BrowserWindow.getAllWindows();
-  const mainWindow = windows[0];
+  // Prefer the top-level app window (menu popup is a child window)
+  const mainWindow = windows.find(w => {
+    try { return w && !w.isDestroyed() && !w.getParentWindow(); } catch { return false; }
+  });
   
   if (!mainWindow || mainWindow.isDestroyed()) {
     console.warn('[BigPicture] No main window to exit from');
@@ -413,6 +725,9 @@ function exitBigPictureMode() {
   }
   
   isInBigPictureMode = false;
+
+  // Restore desktop mode and (after the UI reloads) reattach the active BrowserView.
+  try { mainWindow.__nebulaMode = 'desktop'; } catch {}
   
   // Exit fullscreen and restore normal window
   mainWindow.setFullScreen(false);
@@ -420,6 +735,21 @@ function exitBigPictureMode() {
   
   // Navigate back to desktop UI
   mainWindow.loadFile('renderer/index.html');
+
+  try {
+    mainWindow.webContents.once('did-finish-load', () => {
+      try {
+        const state = getDesktopViewState(mainWindow);
+        const tabId = state?.activeTabId;
+        const view = tabId ? state?.views?.get(tabId) : null;
+        if (view) {
+          try { mainWindow.setBrowserView(view); } catch {}
+          try { if (state.bounds) view.setBounds(state.bounds); } catch {}
+          try { view.setAutoResize({ width: true, height: true }); } catch {}
+        }
+      } catch {}
+    });
+  } catch {}
   
   // Maximize on Windows after exiting fullscreen
   if (process.platform === 'win32') {
@@ -551,6 +881,17 @@ function createWindow(startUrl, bigPictureMode = false) {
   }
 
   const win = new BrowserWindow(windowOptions);
+  win.__nebulaMode = bigPictureMode ? 'bigpicture' : 'desktop';
+  win.on('closed', () => {
+    const state = desktopViewStateByWindowId.get(win.id);
+    if (state) {
+      for (const view of state.views.values()) {
+        try { desktopViewByWebContentsId.delete(view.webContents.id); } catch {}
+        try { view.webContents.destroy(); } catch {}
+      }
+      desktopViewStateByWindowId.delete(win.id);
+    }
+  });
   perfMarks.browserWindow_instantiated = performance.now();
 
   // Intercept window.open() requests and route them into the existing window as a new tab
@@ -824,8 +1165,14 @@ app.whenReady().then(() => {
 
   // --- Auto-Updater Setup ---
   // Configure auto-updater logging
-  autoUpdater.logger = require('electron-updater').autoUpdater.logger;
-  if (autoUpdater.logger) autoUpdater.logger.transports.file.level = 'info';
+  try {
+    autoUpdater.logger = require('electron-updater').autoUpdater.logger;
+    if (autoUpdater.logger && autoUpdater.logger.transports && autoUpdater.logger.transports.file) {
+      autoUpdater.logger.transports.file.level = 'info';
+    }
+  } catch (err) {
+    console.log('[AutoUpdater] Could not configure logger:', err.message);
+  }
 
   // Check for updates after a short delay to not block startup
   setTimeout(() => {
@@ -1155,12 +1502,13 @@ ipcMain.handle('clear-search-history', async () => {
 });
 
 ipcMain.handle('get-zoom-factor', event => {
-  const wc = BrowserWindow.fromWebContents(event.sender).webContents;
-  return wc.getZoomFactor();
+  const wc = getZoomTargetForEvent(event);
+  return wc ? wc.getZoomFactor() : 1.0;
 });
 
 ipcMain.handle('zoom-in', event => {
-  const wc = BrowserWindow.fromWebContents(event.sender).webContents;
+  const wc = getZoomTargetForEvent(event);
+  if (!wc) return 1.0;
   const current = wc.getZoomFactor();
   const z = Math.min(current + 0.1, 3);
   wc.setZoomFactor(z);
@@ -1169,7 +1517,8 @@ ipcMain.handle('zoom-in', event => {
 
 
 ipcMain.handle('zoom-out', event => {
-  const wc = BrowserWindow.fromWebContents(event.sender).webContents;
+  const wc = getZoomTargetForEvent(event);
+  if (!wc) return 1.0;
   const current = wc.getZoomFactor();
   const z = Math.max(current - 0.1, 0.25);
   wc.setZoomFactor(z);
@@ -1192,7 +1541,7 @@ ipcMain.handle('get-display-scale', async (event) => {
 });
 
 ipcMain.handle('set-zoom-factor', (event, zoomFactor) => {
-  const wc = BrowserWindow.fromWebContents(event.sender).webContents;
+  const wc = getZoomTargetForEvent(event);
   if (wc && typeof wc.setZoomFactor === 'function') {
     wc.setZoomFactor(zoomFactor);
     return true;
@@ -1298,9 +1647,11 @@ ipcMain.handle('get-about-info', () => {
 
 // Toggle DevTools for the requesting window (main window webContents)
 ipcMain.handle('open-devtools', (event) => {
-  const wc = BrowserWindow.fromWebContents(event.sender);
-  if (!wc) return false;
-  const contents = wc.webContents;
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return false;
+  const contents = win.__nebulaMode === 'desktop'
+    ? (getActiveDesktopViewWebContents(win) || win.webContents)
+    : win.webContents;
   if (contents.isDevToolsOpened()) {
     contents.closeDevTools();
   } else {
@@ -1308,6 +1659,231 @@ ipcMain.handle('open-devtools', (event) => {
   contents.openDevTools({ mode: 'bottom' });
   }
   return contents.isDevToolsOpened();
+});
+
+// =============================================================================
+// BrowserView IPC (desktop mode tabs)
+// =============================================================================
+ipcMain.handle('browserview-create', (event, { tabId, url }) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return { success: false, error: 'no-window' };
+    if (win.__nebulaMode !== 'desktop') return { success: false, error: 'not-desktop' };
+    const view = createBrowserViewForTab(win, tabId, url);
+    return { success: !!view };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('browserview-set-active', (event, { tabId }) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return false;
+    if (win.__nebulaMode !== 'desktop') return false;
+    return !!setActiveBrowserView(win, tabId);
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle('browserview-destroy', (event, { tabId }) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return false;
+    if (win.__nebulaMode !== 'desktop') return false;
+    return destroyBrowserView(win, tabId);
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle('browserview-load-url', (event, { tabId, url }) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return false;
+    if (win.__nebulaMode !== 'desktop') return false;
+    const state = getDesktopViewState(win);
+    const view = state?.views.get(tabId);
+    if (!view) return false;
+    view.webContents.loadURL(url);
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle('browserview-reload', (event, { tabId, ignoreCache }) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return false;
+    if (win.__nebulaMode !== 'desktop') return false;
+    const state = getDesktopViewState(win);
+    const view = state?.views.get(tabId);
+    if (!view) return false;
+    if (ignoreCache && typeof view.webContents.reloadIgnoringCache === 'function') {
+      view.webContents.reloadIgnoringCache();
+    } else {
+      view.webContents.reload();
+    }
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+ipcMain.handle('browserview-get-url', (event, { tabId }) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return null;
+    if (win.__nebulaMode !== 'desktop') return null;
+    const state = getDesktopViewState(win);
+    const view = state?.views.get(tabId);
+    return view?.webContents.getURL() || null;
+  } catch {
+    return null;
+  }
+});
+
+ipcMain.handle('browserview-execute-js', async (event, { tabId, code }) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return null;
+    if (win.__nebulaMode !== 'desktop') return null;
+    const state = getDesktopViewState(win);
+    const view = state?.views.get(tabId);
+    if (!view) return null;
+    return await view.webContents.executeJavaScript(code, true);
+  } catch {
+    return null;
+  }
+});
+
+ipcMain.handle('browserview-set-bounds', (event, bounds) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return false;
+    if (win.__nebulaMode !== 'desktop') return false;
+    const state = getDesktopViewState(win);
+    if (!state) return false;
+    const safeBounds = {
+      x: Math.max(0, Math.round(bounds?.x || 0)),
+      y: Math.max(0, Math.round(bounds?.y || 0)),
+      width: Math.max(0, Math.round(bounds?.width || 0)),
+      height: Math.max(0, Math.round(bounds?.height || 0))
+    };
+    state.bounds = safeBounds;
+    if (state.activeTabId) {
+      const view = state.views.get(state.activeTabId);
+      if (view) {
+        view.setBounds(safeBounds);
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+// Overlay menu (to sit above BrowserView)
+ipcMain.on('menu-popup-toggle', (event, payload = {}) => {
+  try {
+    const parentWin = BrowserWindow.fromWebContents(event.sender);
+    if (!parentWin) return;
+
+    let menuWin = menuPopupByWindowId.get(parentWin.id);
+    if (!menuWin || menuWin.isDestroyed()) {
+      menuWin = createMenuPopupWindow(parentWin);
+      menuPopupByWindowId.set(parentWin.id, menuWin);
+    }
+
+    if (menuWin.isVisible()) {
+      menuWin.hide();
+      return;
+    }
+
+    positionMenuPopup(parentWin, menuWin, payload.anchorRect);
+
+    const initPayload = { theme: payload.theme || null };
+    const sendInit = () => {
+      try { menuWin.webContents.send('menu-popup-init', initPayload); } catch {}
+    };
+    try {
+      if (menuWin.webContents.isLoadingMainFrame()) {
+        menuWin.webContents.once('did-finish-load', sendInit);
+      } else {
+        sendInit();
+      }
+    } catch {}
+
+    menuWin.show();
+    menuWin.focus();
+  } catch {}
+});
+
+ipcMain.on('menu-popup-hide', (event) => {
+  try {
+    const parentWin = BrowserWindow.fromWebContents(event.sender);
+    if (!parentWin) return;
+    const menuWin = menuPopupByWindowId.get(parentWin.id);
+    if (menuWin && !menuWin.isDestroyed()) menuWin.hide();
+  } catch {}
+});
+
+ipcMain.on('menu-popup-command', (event, payload = {}) => {
+  try {
+    const menuWin = BrowserWindow.fromWebContents(event.sender);
+    const parentWin = menuWin?.getParentWindow();
+    if (menuWin && !menuWin.isDestroyed()) menuWin.hide();
+    if (!parentWin || parentWin.isDestroyed()) return;
+    if (!payload?.cmd || payload.cmd === 'close') return;
+    parentWin.webContents.send('menu-command', payload);
+  } catch {}
+});
+
+ipcMain.on('browserview-broadcast', (event, { channel, args }) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    if (win.__nebulaMode !== 'desktop') return;
+    const state = getDesktopViewState(win);
+    if (!state) return;
+    for (const view of state.views.values()) {
+      try { view.webContents.send(channel, ...(args || [])); } catch {}
+    }
+  } catch {}
+});
+
+ipcMain.on('browserview-host-message', (event, payload = {}) => {
+  try {
+    const { tabId, channel, args } = payload || {};
+    console.log('[IPC Main] browserview-host-message received, tabId:', tabId, 'channel:', channel);
+    
+    let win = getOwnerWindowForContents(event.sender);
+    console.log('[IPC Main] getOwnerWindowForContents returned:', win ? 'window found' : 'null');
+
+    if (!win && tabId) {
+      console.log('[IPC Main] Trying to find window by tabId...');
+      for (const candidate of BrowserWindow.getAllWindows()) {
+        const state = desktopViewStateByWindowId.get(candidate.id);
+        console.log('[IPC Main] Checking window', candidate.id, 'state:', state ? 'found' : 'null', 'has tabId:', state?.views?.has(tabId));
+        if (state && state.views && state.views.has(tabId)) {
+          win = candidate;
+          console.log('[IPC Main] Found window by tabId');
+          break;
+        }
+      }
+    }
+
+    if (!win || win.isDestroyed()) {
+      console.log('[IPC Main] No valid window found, returning');
+      return;
+    }
+    console.log('[IPC Main] Forwarding to renderer');
+    win.webContents.send('browserview-host-message', { tabId, channel, args: args || [] });
+  } catch (err) {
+    console.error('[IPC Main] Error:', err);
+  }
 });
 
 // Helper function to read package.json version
@@ -1524,7 +2100,8 @@ ipcMain.handle('show-open-file-dialog', async () => {
 // Helper to build and show a native context menu for a given webContents + params
 function buildAndShowContextMenu(sender, params = {}) {
   try {
-    const embedder = sender.hostWebContents || sender;
+    const ownerWin = getOwnerWindowForContents(sender);
+    const embedder = ownerWin?.webContents || sender.hostWebContents || sender;
     const template = [];
 
     template.push(
@@ -1584,21 +2161,19 @@ function buildAndShowContextMenu(sender, params = {}) {
       label: 'Inspect Element',
       click: () => {
         try {
-          // Use the main window's webContents for DevTools
-          const mainWin = BrowserWindow.fromWebContents(sender.hostWebContents || sender);
-          const mainWC = mainWin.webContents;
+          const inspectTarget = sender;
           const inspectX = params.x ?? params.clientX ?? 0;
           const inspectY = params.y ?? params.clientY ?? 0;
           
           // Open DevTools docked at bottom if not already open
-          if (!mainWC.isDevToolsOpened()) {
-            mainWC.openDevTools({ mode: 'bottom' });
+          if (!inspectTarget.isDevToolsOpened()) {
+            inspectTarget.openDevTools({ mode: 'bottom' });
           }
           
           // Inspect the element
           setTimeout(() => {
             try {
-              mainWC.inspectElement(inspectX, inspectY);
+              inspectTarget.inspectElement(inspectX, inspectY);
             } catch (e) {
               // Fallback: try on original sender
               try { sender.inspectElement(inspectX, inspectY); } catch {}
@@ -1613,7 +2188,7 @@ function buildAndShowContextMenu(sender, params = {}) {
   // Allow plugins to customize/append context menu
   try { pluginManager.applyContextMenuContrib(template, params, sender); } catch {}
   const menu = Menu.buildFromTemplate(template);
-    const win = BrowserWindow.fromWebContents(embedder);
+    const win = ownerWin || BrowserWindow.fromWebContents(embedder);
     if (win) menu.popup({ window: win });
   } catch (err) {
     console.error('Failed to build context menu:', err);

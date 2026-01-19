@@ -10,6 +10,13 @@ try {
   fsModule = null;
 }
 
+// BrowserView tab id (desktop mode) injected via additionalArguments
+let nebulaTabId = null;
+try {
+  const arg = (process?.argv || []).find(a => typeof a === 'string' && a.startsWith('--nebula-tab-id='));
+  if (arg) nebulaTabId = arg.split('=')[1] || null;
+} catch {}
+
 // =============================================================================
 // GAMEPAD HANDLER - Steam Deck / SteamOS Support
 // =============================================================================
@@ -272,10 +279,19 @@ const electronAPI = {
       console.error('IPC send error:', err);
     }
   },
-  // Send message to embedding page (webview host)
+  // Send message to embedding page (webview host) or to BrowserView host
   sendToHost: (ch, ...args) => {
     try {
-      return ipcRenderer.sendToHost(ch, ...args);
+      // If running in BrowserView context, ALWAYS use browserview-host-message
+      if (nebulaTabId) {
+        return ipcRenderer.send('browserview-host-message', { tabId: nebulaTabId, channel: ch, args });
+      }
+      // Otherwise try ipcRenderer.sendToHost (for webview contexts)
+      if (typeof ipcRenderer.sendToHost === 'function') {
+        return ipcRenderer.sendToHost(ch, ...args);
+      }
+      // Final fallback
+      return ipcRenderer.send(ch, ...args);
     } catch (err) {
       console.error('IPC sendToHost error:', err);
     }
