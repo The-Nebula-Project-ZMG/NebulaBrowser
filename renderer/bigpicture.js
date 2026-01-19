@@ -161,6 +161,7 @@ const state = {
   oskVisible: false,
   oskCallback: null,
   oskFocusIndex: 0,
+  oskContext: null,
   
   // Data
   bookmarks: [],
@@ -349,6 +350,17 @@ function initNavigation() {
       await loadHistory();
       showToast('History refreshed');
     });
+  }
+
+  // Bookmarks actions
+  const addBookmarkBtn = document.getElementById('addBookmarkBtn');
+  if (addBookmarkBtn) {
+    addBookmarkBtn.addEventListener('click', () => startAddBookmark());
+  }
+
+  const addCurrentBookmarkBtn = document.getElementById('addCurrentBookmarkBtn');
+  if (addCurrentBookmarkBtn) {
+    addCurrentBookmarkBtn.addEventListener('click', () => addBookmarkFromCurrentPage());
   }
   
   // Settings cards
@@ -1070,7 +1082,7 @@ function initOSK() {
   document.querySelector('.osk-close')?.addEventListener('click', () => closeOSK());
 }
 
-function openOSK(mode = 'search') {
+function openOSK(mode = 'search', options = {}) {
   const overlay = document.getElementById('osk-overlay');
   const input = document.getElementById('osk-input');
   const label = document.getElementById('osk-label');
@@ -1081,15 +1093,25 @@ function openOSK(mode = 'search') {
   state.oskMode = mode;
   overlay.classList.remove('hidden');
   
-  // Clear input
-  input.value = '';
+  // Set input
+  input.value = typeof options.initialValue === 'string' ? options.initialValue : '';
   
   // Reset cursor position
   updateOSKCursorPosition();
   
   // Update label based on mode
   if (label) {
-    label.textContent = mode === 'search' ? 'Search or enter URL' : 'Enter text';
+    if (options.labelText) {
+      label.textContent = options.labelText;
+    } else if (mode === 'search') {
+      label.textContent = 'Search or enter URL';
+    } else if (mode === 'bookmark-url') {
+      label.textContent = 'Bookmark URL';
+    } else if (mode === 'bookmark-title') {
+      label.textContent = 'Bookmark title';
+    } else {
+      label.textContent = 'Enter text';
+    }
   }
   
   // Update focusable elements to only include OSK keys
@@ -1216,7 +1238,7 @@ function updateOSKCursorPosition() {
   cursor.style.left = `${paddingLeft + textWidth}px`;
 }
 
-function submitOSK() {
+async function submitOSK() {
   const input = document.getElementById('osk-input');
   if (!input) return;
   
@@ -1228,6 +1250,27 @@ function submitOSK() {
   } else if (state.oskMode === 'webview' && state.currentWebview) {
     // Send the typed text to the webview's focused input
     sendTextToWebview(value, true); // true = submit after setting
+  } else if (state.oskMode === 'bookmark-url') {
+    const normalized = normalizeBookmarkUrl(value);
+    if (!normalized) {
+      showToast('Enter a valid URL');
+      return;
+    }
+    state.oskContext = { url: normalized };
+    openOSK('bookmark-title', {
+      labelText: 'Bookmark title',
+      initialValue: getDomainFromUrl(normalized)
+    });
+    return;
+  } else if (state.oskMode === 'bookmark-title') {
+    const url = state.oskContext?.url;
+    if (!url) {
+      closeOSK();
+      return;
+    }
+    const title = value.trim() || getDomainFromUrl(url);
+    await addOrUpdateBookmark({ title, url, icon: getFaviconUrl(url) || 'bookmark' });
+    state.oskContext = null;
   }
   
   closeOSK();
@@ -1309,7 +1352,9 @@ async function loadData() {
 
 async function loadBookmarks() {
   try {
-    if (ipcRenderer && ipcRenderer.invoke) {
+    if (window.bookmarksAPI && typeof window.bookmarksAPI.load === 'function') {
+      state.bookmarks = await window.bookmarksAPI.load() || [];
+    } else if (ipcRenderer && ipcRenderer.invoke) {
       state.bookmarks = await ipcRenderer.invoke('load-bookmarks') || [];
     } else {
       // Fallback to localStorage
@@ -1320,6 +1365,24 @@ async function loadBookmarks() {
   } catch (err) {
     console.error('[BigPicture] Failed to load bookmarks:', err);
     state.bookmarks = [];
+  }
+}
+
+async function saveBookmarks(bookmarks) {
+  try {
+    if (window.bookmarksAPI && typeof window.bookmarksAPI.save === 'function') {
+      await window.bookmarksAPI.save(bookmarks);
+      return true;
+    }
+    if (ipcRenderer && ipcRenderer.invoke) {
+      await ipcRenderer.invoke('save-bookmarks', bookmarks);
+      return true;
+    }
+    localStorage.setItem('bookmarks', JSON.stringify(bookmarks));
+    return true;
+  } catch (err) {
+    console.error('[BigPicture] Failed to save bookmarks:', err);
+    return false;
   }
 }
 
@@ -1403,7 +1466,7 @@ function renderQuickAccess() {
   addTile.dataset.focusable = '';
   addTile.tabIndex = 0;
   addTile.innerHTML = `<span class="material-symbols-outlined">add</span>`;
-  addTile.addEventListener('click', () => showToast('Add bookmark coming soon'));
+  addTile.addEventListener('click', () => startAddBookmark());
   grid.appendChild(addTile);
   
   updateFocusableElements();
@@ -1420,9 +1483,12 @@ function renderBookmarks() {
       <div class="empty-state">
         <span class="material-symbols-outlined">bookmark_border</span>
         <p>No bookmarks yet</p>
-        <p class="empty-hint">Add bookmarks in desktop mode to see them here</p>
+        <p class="empty-hint">Add a bookmark here or in desktop mode</p>
       </div>
     `;
+    const addTile = createAddBookmarkTile();
+    grid.appendChild(addTile);
+    updateFocusableElements();
     return;
   }
   
@@ -1430,8 +1496,21 @@ function renderBookmarks() {
     const tile = createBookmarkTile(bookmark);
     grid.appendChild(tile);
   });
+
+  const addTile = createAddBookmarkTile();
+  grid.appendChild(addTile);
   
   updateFocusableElements();
+}
+
+function createAddBookmarkTile() {
+  const addTile = document.createElement('div');
+  addTile.className = 'tile add-tile';
+  addTile.dataset.focusable = '';
+  addTile.tabIndex = 0;
+  addTile.innerHTML = `<span class="material-symbols-outlined">bookmark_add</span>`;
+  addTile.addEventListener('click', () => startAddBookmark());
+  return addTile;
 }
 
 function createBookmarkTile(bookmark) {
@@ -1465,6 +1544,64 @@ function createBookmarkTile(bookmark) {
   tile.addEventListener('click', () => navigateTo(bookmark.url));
   
   return tile;
+}
+
+function startAddBookmark() {
+  state.oskContext = null;
+  openOSK('bookmark-url', { labelText: 'Bookmark URL' });
+}
+
+function addBookmarkFromCurrentPage() {
+  const webview = state.currentWebview;
+  if (!webview) {
+    showToast('No active page to bookmark');
+    return;
+  }
+
+  const url = typeof webview.getURL === 'function' ? webview.getURL() : webview.src;
+  if (!url) {
+    showToast('No active page to bookmark');
+    return;
+  }
+
+  const title = typeof webview.getTitle === 'function' ? webview.getTitle() : getDomainFromUrl(url);
+  addOrUpdateBookmark({ title, url, icon: getFaviconUrl(url) || 'bookmark' });
+}
+
+async function addOrUpdateBookmark(entry) {
+  const normalized = normalizeBookmarkUrl(entry.url);
+  if (!normalized) {
+    showToast('Enter a valid URL');
+    return false;
+  }
+
+  const title = (entry.title || '').trim() || getDomainFromUrl(normalized);
+  const icon = entry.icon || getFaviconUrl(normalized) || 'bookmark';
+
+  const existingIndex = state.bookmarks.findIndex(b =>
+    (b.url || '').toLowerCase() === normalized.toLowerCase()
+  );
+
+  if (existingIndex >= 0) {
+    state.bookmarks[existingIndex] = {
+      ...state.bookmarks[existingIndex],
+      title,
+      url: normalized,
+      icon
+    };
+  } else {
+    state.bookmarks.unshift({ title, url: normalized, icon });
+  }
+
+  const saved = await saveBookmarks(state.bookmarks);
+  if (saved) {
+    renderBookmarks();
+    showToast(existingIndex >= 0 ? 'Bookmark updated' : 'Bookmark added');
+  } else {
+    showToast('Failed to save bookmark');
+  }
+
+  return saved;
 }
 
 function renderHistory() {
@@ -2370,6 +2507,21 @@ async function copyDiagnostics() {
 // =============================================================================
 // UTILITIES
 // =============================================================================
+
+function normalizeBookmarkUrl(raw) {
+  if (!raw || !raw.trim()) return null;
+  let url = raw.trim();
+
+  if (url.startsWith('nebula://')) return url;
+
+  // Add protocol if missing
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) {
+    url = `https://${url}`;
+  }
+
+  if (!isUrl(url)) return null;
+  return url;
+}
 
 function isUrl(str) {
   // Simple URL detection
