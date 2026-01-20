@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to Nebula</title>
+  <link rel="stylesheet" href="setup.css">
+</head>
+<body>
+  <div class="setup-container">
+    <!-- Progress indicator -->
+    <div class="progress-bar">
+      <div class="progress-step active" data-step="1">
+        <div class="step-circle">1</div>
+        <div class="step-label">Welcome</div>
+      </div>
+      <div class="progress-line"></div>
+      <div class="progress-step" data-step="2">
+        <div class="step-circle">2</div>
+        <div class="step-label">Theme</div>
+      </div>
+      <div class="progress-line"></div>
+      <div class="progress-step" data-step="3">
+        <div class="step-circle">3</div>
+        <div class="step-label">Default Browser</div>
+      </div>
+      <div class="progress-line"></div>
+      <div class="progress-step" data-step="4">
+        <div class="step-circle">4</div>
+        <div class="step-label">Complete</div>
+      </div>
+    </div>
+
+    <!-- Step 1: Welcome -->
+    <div class="setup-step active" data-step="1">
+      <div class="step-content">
+        <div class="logo-container">
+          <img src="../assets/images/Logos/Nebula-Icon.png" alt="Nebula Logo" class="setup-logo">
+        </div>
+        <h1 class="setup-title">Welcome to Nebula</h1>
+        <p class="setup-subtitle">Let's personalize your browsing experience</p>
+        <div class="feature-grid">
+          <div class="feature-item">
+            <div class="feature-icon">🎨</div>
+            <h3>Beautiful Themes</h3>
+            <p>Choose from stunning themes or create your own</p>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">🚀</div>
+            <h3>Lightning Fast</h3>
+            <p>Built for speed and performance</p>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">🎮</div>
+            <h3>Steam Deck Ready</h3>
+            <p>Optimized for gaming handhelds</p>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">🔒</div>
+            <h3>Privacy First</h3>
+            <p>Your data stays yours</p>
+          </div>
+        </div>
+      </div>
+      <div class="step-actions">
+        <button class="btn btn-primary" id="btn-start">Get Started</button>
+        <button class="btn btn-secondary" id="btn-skip-all">Skip Setup</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Theme Selection -->
+    <div class="setup-step" data-step="2">
+      <div class="step-content">
+        <h1 class="setup-title">Choose Your Theme</h1>
+        <p class="setup-subtitle">Pick a color scheme that suits your style</p>
+        <div class="theme-grid" id="theme-grid">
+          <!-- Themes will be dynamically loaded here -->
+        </div>
+      </div>
+      <div class="step-actions">
+        <button class="btn btn-secondary" id="btn-back-2">Back</button>
+        <button class="btn btn-primary" id="btn-next-2">Continue</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Default Browser -->
+    <div class="setup-step" data-step="3">
+      <div class="step-content">
+        <h1 class="setup-title">Set as Default Browser</h1>
+        <p class="setup-subtitle">Make Nebula your go-to browser for all links</p>
+        <div class="default-browser-section">
+          <div class="default-browser-card">
+            <div class="browser-icon">🌐</div>
+            <h3>Quick Access</h3>
+            <p>Open all web links automatically with Nebula</p>
+          </div>
+          <div class="default-browser-status" id="default-status">
+            <div class="status-icon">⏳</div>
+            <p class="status-text">Checking default browser status...</p>
+          </div>
+          <div class="default-browser-actions">
+            <button class="btn btn-large btn-primary" id="btn-set-default">
+              <span class="btn-icon">✓</span>
+              Set as Default Browser
+            </button>
+            <p class="help-text">You can always change this later in settings</p>
+          </div>
+        </div>
+      </div>
+      <div class="step-actions">
+        <button class="btn btn-secondary" id="btn-back-3">Back</button>
+        <button class="btn btn-primary" id="btn-skip-3">Skip for Now</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Complete (Future: Steam Cloud) -->
+    <div class="setup-step" data-step="4">
+      <div class="step-content">
+        <div class="success-icon">✓</div>
+        <h1 class="setup-title">All Set!</h1>
+        <p class="setup-subtitle">You're ready to explore the web with Nebula</p>
+        <div class="completion-summary" id="completion-summary">
+          <!-- Summary will be populated dynamically -->
+        </div>
+        <div class="future-feature-teaser">
+          <h3>Coming Soon: Steam Cloud Sync</h3>
+          <p class="teaser-text">
+            <span class="teaser-icon">☁️</span>
+            In Phase 2, you'll be able to sync your bookmarks, settings, and themes across devices using Steam Cloud.
+          </p>
+        </div>
+      </div>
+      <div class="step-actions">
+        <button class="btn btn-primary btn-large" id="btn-finish">Start Browsing</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="setup.js"></script>
+</body>
+</html>

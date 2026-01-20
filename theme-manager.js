@@ -8,7 +8,7 @@ const path = require('path');
 
 class ThemeManager {
   constructor() {
-    this.themesDir = path.join(__dirname, '..', 'themes');
+    this.themesDir = path.join(__dirname, 'themes');
     this.userThemesDir = path.join(this.themesDir, 'user');
     this.downloadedThemesDir = path.join(this.themesDir, 'downloaded');
     

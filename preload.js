@@ -505,6 +505,24 @@ contextBridge.exposeInMainWorld('updaterAPI', {
   onUpdateStatus: (handler) => ipcRenderer.on('update-status', (_e, payload) => handler(payload))
 });
 
+// First-Time Setup API
+contextBridge.exposeInMainWorld('api', {
+  // Check if this is the first run
+  isFirstRun: () => ipcRenderer.invoke('is-first-run'),
+  // Get all available themes
+  getAllThemes: () => ipcRenderer.invoke('get-all-themes'),
+  // Apply a theme
+  applyTheme: (themeId) => ipcRenderer.invoke('apply-theme', themeId),
+  // Check if Nebula is the default browser
+  isDefaultBrowser: () => ipcRenderer.invoke('is-default-browser'),
+  // Set Nebula as the default browser
+  setAsDefaultBrowser: () => ipcRenderer.invoke('set-as-default-browser'),
+  // Complete first-run setup
+  completeFirstRun: (data) => ipcRenderer.invoke('complete-first-run', data),
+  // Get first-run data
+  getFirstRunData: () => ipcRenderer.invoke('get-first-run-data')
+});
+
 // ----------------------------------------
 // Plugin renderer preloads
 // ----------------------------------------

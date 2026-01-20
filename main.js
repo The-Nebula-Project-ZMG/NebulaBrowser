@@ -459,6 +459,130 @@ function getZoomTargetForEvent(event) {
   return win.webContents;
 }
 
+// =============================================================================
+// FIRST-TIME SETUP UTILITIES
+// =============================================================================
+
+/**
+ * Check if this is the first run of the application
+ */
+function getOnboardingFilePath() {
+  try {
+    const portablePath = portableData.getDataFilePath?.('first-run.json');
+    if (portablePath) return portablePath;
+  } catch {}
+  return path.join(app.getPath('userData'), 'first-run.json');
+}
+
+function migrateFirstRunFile() {
+  const newPath = getOnboardingFilePath();
+  const legacyPath = path.join(__dirname, 'first-run.json');
+  if (newPath === legacyPath) return;
+  try {
+    if (!fs.existsSync(newPath) && fs.existsSync(legacyPath)) {
+      const data = fs.readFileSync(legacyPath, 'utf8');
+      fs.writeFileSync(newPath, data);
+      try { fs.unlinkSync(legacyPath); } catch {}
+      console.log('[FirstRun] Migrated first-run.json to user data path');
+    }
+  } catch (err) {
+    console.error('[FirstRun] Error migrating first-run.json:', err);
+  }
+}
+
+function isFirstRun() {
+  migrateFirstRunFile();
+  const firstRunPath = getOnboardingFilePath();
+  try {
+    if (fs.existsSync(firstRunPath)) {
+      const data = JSON.parse(fs.readFileSync(firstRunPath, 'utf8'));
+      return !data.completed;
+    }
+    return true; // File doesn't exist, so it's first run
+  } catch (err) {
+    console.error('[FirstRun] Error checking first-run status:', err);
+    return true; // Assume first run on error
+  }
+}
+
+/**
+ * Get first-run data
+ */
+function getFirstRunData() {
+  migrateFirstRunFile();
+  const firstRunPath = getOnboardingFilePath();
+  try {
+    if (fs.existsSync(firstRunPath)) {
+      return JSON.parse(fs.readFileSync(firstRunPath, 'utf8'));
+    }
+    return null;
+  } catch (err) {
+    console.error('[FirstRun] Error reading first-run data:', err);
+    return null;
+  }
+}
+
+/**
+ * Complete first-run setup and save preferences
+ */
+async function completeFirstRun(preferences = {}) {
+  migrateFirstRunFile();
+  const firstRunPath = getOnboardingFilePath();
+  const data = {
+    completed: true,
+    skipped: preferences.skipped || false,
+    selectedThemeId: preferences.selectedTheme || 'default',
+    defaultBrowserAttempted: preferences.defaultBrowserSet || false,
+    defaultBrowserSet: preferences.defaultBrowserSet || false,
+    steamCloudOptIn: preferences.steamCloudOptIn || false,
+    completedAt: new Date().toISOString()
+  };
+  
+  try {
+    if (portableData.isPortableMode()) {
+      await portableData.writeSecureFileAsync(firstRunPath, JSON.stringify(data, null, 2));
+    } else {
+      await fs.promises.writeFile(firstRunPath, JSON.stringify(data, null, 2));
+    }
+    console.log('[FirstRun] First-run setup completed:', data);
+    return true;
+  } catch (err) {
+    console.error('[FirstRun] Error saving first-run data:', err);
+    return false;
+  }
+}
+
+/**
+ * Check if Nebula is set as the default browser
+ */
+function isDefaultBrowser() {
+  try {
+    return app.isDefaultProtocolClient('http') && app.isDefaultProtocolClient('https');
+  } catch (err) {
+    console.error('[DefaultBrowser] Error checking default browser status:', err);
+    return false;
+  }
+}
+
+/**
+ * Set Nebula as the default browser
+ */
+function setAsDefaultBrowser() {
+  try {
+    const httpResult = app.setAsDefaultProtocolClient('http');
+    const httpsResult = app.setAsDefaultProtocolClient('https');
+    const htmlResult = app.setAsDefaultProtocolClient('html');
+    
+    console.log('[DefaultBrowser] Set as default:', { httpResult, httpsResult, htmlResult });
+    return httpResult && httpsResult;
+  } catch (err) {
+    console.error('[DefaultBrowser] Error setting as default browser:', err);
+    return false;
+  }
+}
+
+// =============================================================================
+
 // Initialize portable data paths BEFORE app.ready (must be done early)
 // This enables portable mode on all platforms (Windows, macOS, Linux)
 // Data is stored in 'user-data' folder within the application directory
@@ -966,11 +1090,20 @@ function createWindow(startUrl, bigPictureMode = false) {
   });
 
   // Load appropriate UI based on mode (Big Picture or Desktop)
+  // Check for first-run and load setup page if needed
   if (bigPictureMode) {
     win.loadFile('renderer/bigpicture.html');
     win.setTitle('Nebula - Big Picture Mode');
   } else {
-    win.loadFile('renderer/index.html');
+    // Check if this is the first run (only for desktop mode)
+    const firstRun = isFirstRun();
+    if (firstRun) {
+      console.log('[Startup] First run detected, loading setup page');
+      win.loadFile('renderer/setup.html');
+      win.setTitle('Welcome to Nebula');
+    } else {
+      win.loadFile('renderer/index.html');
+    }
   }
   perfMarks.loadFile_issued = performance.now();
 
@@ -1271,6 +1404,71 @@ ipcMain.handle('get-app-info', () => {
     isPackaged: app.isPackaged,
     isDevelopment: !app.isPackaged
   };
+});
+
+// --- First-Time Setup IPC handlers ---
+ipcMain.handle('is-first-run', () => {
+  return isFirstRun();
+});
+
+ipcMain.handle('get-first-run-data', () => {
+  return getFirstRunData();
+});
+
+ipcMain.handle('complete-first-run', async (event, preferences) => {
+  try {
+    const success = await completeFirstRun(preferences);
+    return { success };
+  } catch (err) {
+    console.error('[FirstRun] Error in IPC handler:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-all-themes', () => {
+  try {
+    const ThemeManager = require('./theme-manager.js');
+    const manager = new ThemeManager();
+    const themes = manager.getAllThemes();
+    const defaultThemeCount = Object.keys(themes.default || {}).length;
+    const userThemeCount = Object.keys(themes.user || {}).length;
+    const downloadedThemeCount = Object.keys(themes.downloaded || {}).length;
+    console.log('[Themes] Loaded themes:', {
+      default: defaultThemeCount,
+      user: userThemeCount,
+      downloaded: downloadedThemeCount
+    });
+    return themes;
+  } catch (err) {
+    console.error('[Themes] Error loading themes:', err);
+    return { default: { default: { name: 'Default', colors: {} } } };
+  }
+});
+
+ipcMain.handle('apply-theme', async (event, themeId) => {
+  try {
+    // The theme will be applied in the renderer
+    // Here we just save the preference
+    console.log('[Themes] Theme selected:', themeId);
+    return { success: true };
+  } catch (err) {
+    console.error('[Themes] Error applying theme:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('is-default-browser', () => {
+  return isDefaultBrowser();
+});
+
+ipcMain.handle('set-as-default-browser', () => {
+  try {
+    const result = setAsDefaultBrowser();
+    return { success: result };
+  } catch (err) {
+    console.error('[DefaultBrowser] Error in IPC handler:', err);
+    return { success: false, error: err.message };
+  }
 });
 
 // --- window control handlers (only registered once now)
