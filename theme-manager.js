@@ -5,22 +5,53 @@
 
 const fs = require('fs');
 const path = require('path');
+const { app } = require('electron');
 
 class ThemeManager {
   constructor() {
     this.themesDir = path.join(__dirname, 'themes');
-    this.userThemesDir = path.join(this.themesDir, 'user');
-    this.downloadedThemesDir = path.join(this.themesDir, 'downloaded');
+    this.userDataThemesDir = path.join(app.getPath('userData'), 'themes');
+    this.userThemesDir = path.join(this.userDataThemesDir, 'user');
+    this.downloadedThemesDir = path.join(this.userDataThemesDir, 'downloaded');
+    this.legacyUserThemesDir = path.join(this.themesDir, 'user');
+    this.legacyDownloadedThemesDir = path.join(this.themesDir, 'downloaded');
     
     this.ensureDirectories();
+    this.migrateLegacyThemes();
   }
 
   ensureDirectories() {
-    [this.userThemesDir, this.downloadedThemesDir].forEach(dir => {
+    [this.userDataThemesDir, this.userThemesDir, this.downloadedThemesDir].forEach(dir => {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
     });
+  }
+
+  migrateLegacyThemes() {
+    this.migrateDirectoryIfNeeded(this.legacyUserThemesDir, this.userThemesDir);
+    this.migrateDirectoryIfNeeded(this.legacyDownloadedThemesDir, this.downloadedThemesDir);
+  }
+
+  migrateDirectoryIfNeeded(fromDir, toDir) {
+    try {
+      if (!fs.existsSync(fromDir)) return;
+      if (!fs.existsSync(toDir)) fs.mkdirSync(toDir, { recursive: true });
+
+      const toFiles = fs.readdirSync(toDir).filter(file => file.endsWith('.json'));
+      if (toFiles.length > 0) return;
+
+      const fromFiles = fs.readdirSync(fromDir).filter(file => file.endsWith('.json'));
+      fromFiles.forEach(file => {
+        const sourcePath = path.join(fromDir, file);
+        const destinationPath = path.join(toDir, file);
+        if (!fs.existsSync(destinationPath)) {
+          fs.copyFileSync(sourcePath, destinationPath);
+        }
+      });
+    } catch (error) {
+      console.warn('[Themes] Failed to migrate legacy themes:', error);
+    }
   }
 
   /**
