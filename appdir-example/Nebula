@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+# Run Nebula from an extracted AppImage folder with safe LD/XDG paths and Linux flags.
+# This repo can end up with either:
+# - nebula-appdir/squashfs-root/nebula (common after copying squashfs-root into nebula-appdir)
+# - nebula-appdir/nebula (if you copied the extracted contents directly into nebula-appdir)
+#
+# PORTABLE MODE: User data (cookies, history, bookmarks) is stored in usr/data/ alongside the app.
+# This keeps all data self-contained and portable on Linux.
+set -euo pipefail
+
+SELF_DIR="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
+
+if [ -x "$SELF_DIR/nebula-appdir/nebula" ]; then
+	APPROOT="$SELF_DIR/nebula-appdir"
+	BIN="$APPROOT/nebula"
+elif [ -x "$SELF_DIR/squashfs-root/nebula" ]; then
+	APPROOT="$SELF_DIR/squashfs-root"
+	BIN="$APPROOT/nebula"
+elif [ -x "$SELF_DIR/nebula" ]; then
+	APPROOT="$SELF_DIR"
+	BIN="$APPROOT/nebula"
+else
+	echo "Nebula binary not found. Expected either:"
+	echo "- $SELF_DIR/nebula-appdir/nebula"
+	echo "- $SELF_DIR/squashfs-root/nebula"
+	echo "- $SELF_DIR/nebula"
+	exit 1
+fi
+
+# --- PORTABLE DATA CONFIGURATION ---
+# Store user data (cookies, history, bookmarks, etc.) in a local folder
+# Data is stored with secure permissions (700 for dirs, 600 for files)
+PORTABLE_DATA_DIR="$SELF_DIR/usr/data"
+export NEBULA_PORTABLE=1
+export NEBULA_PORTABLE_PATH="$PORTABLE_DATA_DIR"
+
+# Create portable data directory with secure permissions if it doesn't exist
+if [ ! -d "$PORTABLE_DATA_DIR" ]; then
+	mkdir -p "$PORTABLE_DATA_DIR"
+	chmod 700 "$PORTABLE_DATA_DIR"
+fi
+
+export LD_LIBRARY_PATH="$APPROOT/usr/lib:${LD_LIBRARY_PATH:-}"
+export XDG_DATA_DIRS="$APPROOT/usr/share:${XDG_DATA_DIRS:-/usr/share}"
+
+# =============================================================================
+# STEAM INPUT CONFIGURATION - Always set these to prevent controller emulation
+# =============================================================================
+# These variables tell Steam's input layer that this app handles controller
+# input natively and should NOT have mouse/keyboard emulation applied.
+# Set unconditionally since Software apps may not receive Steam env vars.
+
+# Disable Steam's virtual gamepad layer - CRITICAL for native controller support
+export SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD=0
+export STEAM_INPUT_ENABLE_VIRTUAL_GAMEPAD=0
+
+# Allow raw gamepad access
+export SDL_GAMECONTROLLER_IGNORE_DEVICES=""
+
+# Allow background gamepad events (useful when app doesn't have focus)
+export SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1
+
+# Hint to SDL that we're using gamepads natively
+export SDL_GAMECONTROLLERCONFIG="${SDL_GAMECONTROLLERCONFIG:-}"
+
+# Steam can inject its overlay via LD_PRELOAD (gameoverlayrenderer.so).
+# In some setups this breaks Chromium/Electron gamepad input. When we detect
+# a Steam-launched session, strip the overlay preload but keep other entries.
+# Also configure additional Steam-specific settings.
+if [ -n "${SteamAppId:-}" ] || [ -n "${STEAM_APP_ID:-}" ] || [ -n "${STEAM_COMPAT_CLIENT_INSTALL_PATH:-}" ] || [ -n "${STEAM_COMPAT_DATA_PATH:-}" ]; then
+	# Enable Big Picture Mode for controller-friendly UI when launched from Steam
+	export NEBULA_BIG_PICTURE="${NEBULA_BIG_PICTURE:-1}"
+	
+	# Enable GPU acceleration on Linux
+	export NEBULA_GPU_ALLOW_LINUX=1
+	
+	if [ -n "${LD_PRELOAD:-}" ]; then
+		CLEANED_LD_PRELOAD=""
+		IFS=':' read -r -a _preload_parts <<< "$LD_PRELOAD"
+		for _p in "${_preload_parts[@]}"; do
+			[ -z "$_p" ] && continue
+			case "$_p" in
+				*gameoverlayrenderer.so*)
+					;;
+				*)
+					if [ -z "$CLEANED_LD_PRELOAD" ]; then
+						CLEANED_LD_PRELOAD="$_p"
+					else
+						CLEANED_LD_PRELOAD="$CLEANED_LD_PRELOAD:$_p"
+					fi
+					;;
+			esac
+		done
+		if [ -z "$CLEANED_LD_PRELOAD" ]; then
+			unset LD_PRELOAD
+		else
+			export LD_PRELOAD="$CLEANED_LD_PRELOAD"
+		fi
+	fi
+fi
+
+GPU_ARGS=()
+
+# Optional GPU tuning profiles strike a balance between enabling hardware decode
+# and keeping the launcher safe on systems with fragile Mesa/VA-API stacks.
+# Default to enabling GPU tweaks on Linux unless explicitly disabled.
+export NEBULA_GPU_PROFILE="${NEBULA_GPU_PROFILE:-}"
+GPU_GL_MODE="${NEBULA_GPU_GL:-}"
+export NEBULA_GPU_TWEAKS="${NEBULA_GPU_TWEAKS:-1}"
+
+if [ "${NEBULA_GPU_TWEAKS}" = "1" ] && [ -z "$NEBULA_GPU_PROFILE" ]; then
+	export NEBULA_GPU_PROFILE=vaapi
+fi
+
+case "$NEBULA_GPU_PROFILE" in
+	vaapi)
+		GPU_ARGS+=(--ignore-gpu-blocklist)
+		GPU_ARGS+=(--enable-features=VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization,UseSkiaRenderer,VaapiVideoDecoderLinuxGL,VaapiVideoDecoderLinuxZeroCopyGL)
+		GPU_ARGS+=(--enable-zero-copy)
+		GPU_ARGS+=(--enable-gpu-rasterization)
+		GPU_ARGS+=(--enable-accelerated-video-decode)
+		GPU_ARGS+=(--enable-native-gpu-memory-buffers)
+		if [ -z "${LIBVA_DRIVER_NAME:-}" ]; then
+			export LIBVA_DRIVER_NAME=radeonsi
+		fi
+		;;
+	angle)
+		GPU_ARGS+=(--ignore-gpu-blocklist)
+		GPU_ARGS+=(--enable-features=VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization,UseSkiaRenderer,VaapiVideoDecoderLinuxGL)
+		GPU_ARGS+=(--enable-zero-copy)
+		GPU_ARGS+=(--enable-gpu-rasterization)
+		GPU_ARGS+=(--enable-native-gpu-memory-buffers)
+		GPU_ARGS+=(--enable-accelerated-video-decode)
+		if [ -z "${LIBVA_DRIVER_NAME:-}" ]; then
+			export LIBVA_DRIVER_NAME=radeonsi
+		fi
+		if [ -z "${AMD_VULKAN_ICD:-}" ]; then
+			export AMD_VULKAN_ICD=RADV
+		fi
+		;;
+	amd-handheld)
+		GPU_ARGS+=(--ignore-gpu-blocklist)
+		GPU_ARGS+=(--use-angle=vulkan)
+		AMD_HANDHELD_FEATURES="VaapiVideoDecoder,VaapiVideoEncoder,CanvasOopRasterization,UseSkiaRenderer,VaapiVideoDecoderLinuxGL,VaapiVideoDecoderLinuxZeroCopyGL"
+		if [ -n "${WAYLAND_DISPLAY:-}" ] || [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
+			AMD_HANDHELD_FEATURES="UseOzonePlatform,WaylandWindowDecorations,${AMD_HANDHELD_FEATURES}"
+			GPU_ARGS+=(--ozone-platform-hint=auto)
+			GPU_ARGS+=(--ozone-platform=wayland)
+		fi
+		GPU_ARGS+=(--enable-features="$AMD_HANDHELD_FEATURES")
+		GPU_ARGS+=(--enable-zero-copy)
+		GPU_ARGS+=(--enable-gpu-rasterization)
+		if [ -z "${LIBVA_DRIVER_NAME:-}" ]; then
+			export LIBVA_DRIVER_NAME=radeonsi
+		fi
+		if [ -z "${MESA_VK_WSI_PRESENT_MODE:-}" ]; then
+			export MESA_VK_WSI_PRESENT_MODE=mailbox
+		fi
+		;;
+	software)
+		GPU_ARGS+=(--disable-gpu)
+		;;
+	"")
+		;;
+	*)
+		echo "Warning: Unknown NEBULA_GPU_PROFILE '$NEBULA_GPU_PROFILE'" >&2
+		;;
+esac
+
+if [ -n "$GPU_GL_MODE" ]; then
+	# Map common GL mode names to Electron-compatible values
+	case "$GPU_GL_MODE" in
+		egl|egl-angle) GPU_GL_MODE="angle" ;;
+		desktop) GPU_GL_MODE="desktop" ;;
+	esac
+	GPU_ARGS+=(--use-gl="$GPU_GL_MODE")
+fi
+
+if [ -n "${NEBULA_GPU_EXTRA_ARGS:-}" ]; then
+	# shellcheck disable=SC2086 # word splitting is intentional for custom flag tokens
+	read -r -a _nebula_gpu_extra <<< "${NEBULA_GPU_EXTRA_ARGS}"
+	GPU_ARGS+=("${_nebula_gpu_extra[@]}")
+fi
+
+exec "$BIN" --no-sandbox "${GPU_ARGS[@]}" "$@"

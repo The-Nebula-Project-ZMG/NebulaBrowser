@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Nebula
+Comment=Nebula Browser
+Exec=./Nebula %U
+Terminal=false
+Type=Application
+Icon=nebula
+Categories=Network;WebBrowser;
+StartupWMClass=Nebula

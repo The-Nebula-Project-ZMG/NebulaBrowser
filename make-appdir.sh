@@ -3,6 +3,7 @@
 set -euo pipefail
 SRC="${1:-squashfs-root}"
 DEST="${2:-nebula-appdir}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if [ ! -d "$SRC" ]; then
   echo "Source $SRC not found. Extract the AppImage first (./dist/Nebula-*.AppImage --appimage-extract)"
@@ -52,8 +53,37 @@ StartupWMClass=Nebula
 EOF
 fi
 
+# Match appdir-example layout: extract app.asar to resources/app and keep app.asar.orig
+if [ -f "$DEST/resources/app.asar" ]; then
+  if command -v npx &> /dev/null; then
+    echo "Extracting app.asar to resources/app (keeping app.asar.orig)"
+    (cd "$DEST/resources" && npx asar extract "app.asar" "app")
+    mv "$DEST/resources/app.asar" "$DEST/resources/app.asar.orig" 2>/dev/null || true
+  else
+    echo "Warning: npx not found; leaving app.asar in place."
+  fi
+fi
+
+# Copy Linux launch wrappers if present in appdir-example
+if [ -f "$SCRIPT_DIR/appdir-example/run-nebula.sh" ]; then
+  cp "$SCRIPT_DIR/appdir-example/run-nebula.sh" "$DEST/run-nebula.sh"
+  chmod +x "$DEST/run-nebula.sh" || true
+fi
+if [ -f "$SCRIPT_DIR/appdir-example/steam_appid.txt" ]; then
+  cp "$SCRIPT_DIR/appdir-example/steam_appid.txt" "$DEST/steam_appid.txt"
+fi
+if [ -f "$SCRIPT_DIR/appdir-example/nebula.desktop" ]; then
+  cp "$SCRIPT_DIR/appdir-example/nebula.desktop" "$DEST/nebula.desktop"
+  cp "$SCRIPT_DIR/appdir-example/nebula.desktop" "$DEST/usr/share/applications/nebula.desktop"
+fi
+# Ensure root launcher exists (from example if needed)
+if [ -f "$SCRIPT_DIR/appdir-example/Nebula" ]; then
+  cp "$SCRIPT_DIR/appdir-example/Nebula" "$DEST/Nebula"
+  chmod +x "$DEST/Nebula" || true
+fi
+
 # Fix permissions
 chmod -R a+r "$DEST/usr/share/icons/hicolor/256x256/apps" || true
 chmod +x "$DEST/Nebula" || true
 
-echo "AppDir assembled at $DEST. Run with: $DEST/Nebula"
+echo "AppDir assembled at $DEST. Run with: $DEST/run-nebula.sh"

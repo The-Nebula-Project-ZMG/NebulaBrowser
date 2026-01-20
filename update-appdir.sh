@@ -5,17 +5,46 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_DIR="$SCRIPT_DIR/nebula-appdir/nebula-appdir/resources/app"
+APPDIR_ROOT="$SCRIPT_DIR/nebula-appdir"
+# Support both layouts:
+# 1) nebula-appdir/resources/app
+# 2) nebula-appdir/nebula-appdir/resources/app (example layout)
+if [ -d "$APPDIR_ROOT/resources" ] || [ -f "$APPDIR_ROOT/resources/app.asar" ]; then
+    RESOURCES_DIR="$APPDIR_ROOT/resources"
+else
+    RESOURCES_DIR="$APPDIR_ROOT/nebula-appdir/resources"
+fi
+APP_DIR="$RESOURCES_DIR/app"
+ASAR_FILE="$RESOURCES_DIR/app.asar"
+ASAR_ORIG_FILE="$RESOURCES_DIR/app.asar.orig"
 
 echo "🚀 Updating Nebula AppDir..."
 echo "   Source: $SCRIPT_DIR"
 echo "   Target: $APP_DIR"
 echo ""
 
-# Check if target exists
+# Check if target exists (or extract from app.asar if present)
 if [ ! -d "$APP_DIR" ]; then
-    echo "❌ Error: AppDir not found at $APP_DIR"
-    exit 1
+    if [ -f "$ASAR_FILE" ] || [ -f "$ASAR_ORIG_FILE" ]; then
+        if command -v npx &> /dev/null; then
+            if [ -f "$ASAR_FILE" ]; then
+                echo "ℹ️  app.asar detected. Extracting to $APP_DIR..."
+                (cd "$RESOURCES_DIR" && npx asar extract "app.asar" "app")
+                mv "$ASAR_FILE" "$ASAR_ORIG_FILE" 2>/dev/null || true
+            else
+                echo "ℹ️  app.asar.orig detected. Extracting to $APP_DIR..."
+                (cd "$RESOURCES_DIR" && npx asar extract "app.asar.orig" "app")
+            fi
+        else
+            echo "❌ Error: $APP_DIR not found and npx is not available to extract app.asar."
+            echo "   Install Node.js/npm, then run:"
+            echo "   cd $RESOURCES_DIR && npx asar extract app.asar app"
+            exit 1
+        fi
+    else
+        echo "❌ Error: AppDir not found at $APP_DIR"
+        exit 1
+    fi
 fi
 
 # Files to sync (main app files)
@@ -23,6 +52,7 @@ FILES=(
     "main.js"
     "preload.js"
     "package.json"
+    "portable-data.js"
     "gpu-config.js"
     "gpu-fallback.js"
     "performance-monitor.js"

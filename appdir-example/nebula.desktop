@@ -1,0 +1,10 @@
+#!/usr/bin/env xdg-open
+[Desktop Entry]
+Name=Nebula
+Comment=Nebula Browser (Portable Mode - data stored locally)
+Exec=env NEBULA_GPU_TWEAKS=1 /home/deck/Documents/Repos/NebulaBrowser/nebula-appdir/Nebula %U
+Terminal=false
+Type=Application
+Icon=nebula
+Categories=Network;WebBrowser;
+StartupWMClass=Nebula
