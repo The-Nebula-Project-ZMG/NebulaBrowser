@@ -85,7 +85,8 @@ class PortableDataManager {
 
   /**
    * Get the portable data directory path
-   * Uses NEBULA_PORTABLE_PATH if set, otherwise creates 'user-data' folder in app directory
+   * Uses NEBULA_PORTABLE_PATH if set, otherwise creates 'user-data' in Documents/My Games/<AppName>
+   * with a safe fallback to the app directory.
    */
   getPortableDataPath() {
     if (this._portableDataPath !== null) {
@@ -110,9 +111,20 @@ class PortableDataManager {
       }
     }
 
-    // Default: create 'user-data' folder in the application directory
-    const appRoot = this._getAppRootDir();
-    const dataPath = path.join(appRoot, 'user-data');
+    // Default: prefer Documents/My Games/<AppName>/user-data
+    let dataPath = '';
+    try {
+      const docsDir = app.getPath('documents');
+      const appName = app.getName() || 'NebulaBrowser';
+      dataPath = path.join(docsDir, 'My Games', appName, 'user-data');
+    } catch (err) {
+      console.warn('[Portable] Failed to resolve Documents path, using app directory');
+    }
+
+    if (!dataPath) {
+      const appRoot = this._getAppRootDir();
+      dataPath = path.join(appRoot, 'user-data');
+    }
     
     // Validate the path
     if (this._isPathSafe(dataPath)) {
