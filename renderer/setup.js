@@ -294,26 +294,47 @@ async function setDefaultBrowser() {
     const result = await window.api.setAsDefaultBrowser();
     
     if (result.success) {
-      setupState.defaultBrowserSet = true;
-      
+      const isDefault = await window.api.isDefaultBrowser();
+      if (isDefault) {
+        setupState.defaultBrowserSet = true;
+        
+        if (statusEl) {
+          statusEl.classList.remove('not-default');
+          statusEl.classList.add('is-default');
+          statusEl.innerHTML = `
+            <div class="status-icon">✓</div>
+            <p class="status-text">Nebula is now your default browser!</p>
+          `;
+        }
+        
+        if (btn) {
+          btn.innerHTML = '<span class="btn-icon">✓</span> Set Successfully';
+        }
+        
+        // Auto-advance after a brief delay
+        setTimeout(() => goToStep(4), 1500);
+        return;
+      }
+
       if (statusEl) {
         statusEl.classList.remove('not-default');
-        statusEl.classList.add('is-default');
         statusEl.innerHTML = `
-          <div class="status-icon">✓</div>
-          <p class="status-text">Nebula is now your default browser!</p>
+          <div class="status-icon">ℹ️</div>
+          <p class="status-text">System settings opened. Choose Nebula as your default browser to finish.</p>
         `;
       }
-      
+
       if (btn) {
-        btn.innerHTML = '<span class="btn-icon">✓</span> Set Successfully';
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn-icon">↻</span> Check Again';
       }
-      
-      // Auto-advance after a brief delay
-      setTimeout(() => goToStep(4), 1500);
-    } else {
-      throw new Error(result.error || 'Failed to set default browser');
+
+      if (result.needsUserAction && window.api.openDefaultBrowserSettings) {
+        try { await window.api.openDefaultBrowserSettings(); } catch {}
+      }
+      return;
     }
+    throw new Error(result.error || 'Failed to set default browser');
   } catch (error) {
     console.error('[Setup] Error setting default browser:', error);
     

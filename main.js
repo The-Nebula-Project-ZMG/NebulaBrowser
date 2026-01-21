@@ -151,6 +151,77 @@ const GPUConfig = require('./gpu-config');
 const PluginManager = require('./plugin-manager');
 const portableData = require('./portable-data');
 
+// Windows: set explicit AppUserModelID to ensure proper default-app registration
+// and notification branding.
+if (process.platform === 'win32') {
+  try {
+    app.setAppUserModelId('com.andrewzambazos.nebula');
+  } catch {}
+}
+
+// --- Single instance + protocol URL handling ---
+let pendingOpenUrl = null;
+
+function extractUrlFromArgv(argv = []) {
+  return argv.find(arg => /^https?:\/\//i.test(arg));
+}
+
+function openUrlInExistingWindow(targetUrl) {
+  if (!targetUrl) return false;
+  const windows = BrowserWindow.getAllWindows();
+  const mainWindow = windows.find(w => {
+    try { return w && !w.isDestroyed() && !w.getParentWindow(); } catch { return false; }
+  });
+
+  if (mainWindow) {
+    try { mainWindow.show(); } catch {}
+    try { mainWindow.focus(); } catch {}
+    try {
+      mainWindow.webContents.send('open-url-new-tab', targetUrl);
+      return true;
+    } catch {}
+    try {
+      mainWindow.webContents.send('open-url', targetUrl);
+      return true;
+    } catch {}
+  }
+
+  pendingOpenUrl = targetUrl;
+  return false;
+}
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv) => {
+    const url = extractUrlFromArgv(argv);
+    if (url) {
+      openUrlInExistingWindow(url);
+      return;
+    }
+    const windows = BrowserWindow.getAllWindows();
+    const mainWindow = windows.find(w => {
+      try { return w && !w.isDestroyed() && !w.getParentWindow(); } catch { return false; }
+    });
+    if (mainWindow) {
+      try { mainWindow.show(); } catch {}
+      try { mainWindow.focus(); } catch {}
+    }
+  });
+}
+
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  openUrlInExistingWindow(url);
+});
+
+// Capture protocol URL if the app was launched with one
+const initialProtocolUrl = extractUrlFromArgv(process.argv);
+if (initialProtocolUrl) {
+  pendingOpenUrl = initialProtocolUrl;
+}
+
 // Initialize performance monitoring and GPU management
 const perfMonitor = new PerformanceMonitor();
 const gpuFallback = new GPUFallback();
@@ -555,8 +626,21 @@ async function completeFirstRun(preferences = {}) {
 /**
  * Check if Nebula is set as the default browser
  */
+function getProtocolClientArgs() {
+  if (process.platform === 'win32' && process.defaultApp) {
+    const appPath = path.resolve(process.argv[1]);
+    return { exe: process.execPath, args: [appPath] };
+  }
+  return null;
+}
+
 function isDefaultBrowser() {
   try {
+    const protocolArgs = getProtocolClientArgs();
+    if (protocolArgs) {
+      return app.isDefaultProtocolClient('http', protocolArgs.exe, protocolArgs.args)
+        && app.isDefaultProtocolClient('https', protocolArgs.exe, protocolArgs.args);
+    }
     return app.isDefaultProtocolClient('http') && app.isDefaultProtocolClient('https');
   } catch (err) {
     console.error('[DefaultBrowser] Error checking default browser status:', err);
@@ -569,16 +653,40 @@ function isDefaultBrowser() {
  */
 function setAsDefaultBrowser() {
   try {
-    const httpResult = app.setAsDefaultProtocolClient('http');
-    const httpsResult = app.setAsDefaultProtocolClient('https');
-    const htmlResult = app.setAsDefaultProtocolClient('html');
-    
-    console.log('[DefaultBrowser] Set as default:', { httpResult, httpsResult, htmlResult });
-    return httpResult && httpsResult;
+    const protocolArgs = getProtocolClientArgs();
+    const httpResult = protocolArgs
+      ? app.setAsDefaultProtocolClient('http', protocolArgs.exe, protocolArgs.args)
+      : app.setAsDefaultProtocolClient('http');
+    const httpsResult = protocolArgs
+      ? app.setAsDefaultProtocolClient('https', protocolArgs.exe, protocolArgs.args)
+      : app.setAsDefaultProtocolClient('https');
+    const htmlResult = protocolArgs
+      ? app.setAsDefaultProtocolClient('html', protocolArgs.exe, protocolArgs.args)
+      : app.setAsDefaultProtocolClient('html');
+
+    const success = httpResult && httpsResult;
+    const needsUserAction = success && !isDefaultBrowser();
+
+    console.log('[DefaultBrowser] Set as default:', { httpResult, httpsResult, htmlResult, needsUserAction });
+    return { success, needsUserAction };
   } catch (err) {
     console.error('[DefaultBrowser] Error setting as default browser:', err);
-    return false;
+    return { success: false, needsUserAction: false, error: err.message };
   }
+}
+
+function openDefaultBrowserSettings() {
+  try {
+    if (process.platform === 'win32') {
+      return shell.openExternal('ms-settings:defaultapps');
+    }
+    if (process.platform === 'darwin') {
+      return shell.openExternal('x-apple.systempreferences:com.apple.preference.general?DefaultWebBrowser');
+    }
+  } catch (err) {
+    console.warn('[DefaultBrowser] Failed to open system settings:', err.message || err);
+  }
+  return false;
 }
 
 // =============================================================================
@@ -1246,12 +1354,15 @@ app.whenReady().then(() => {
 
   // If launched via SteamOS Gaming Mode / gamepad UI, default to Big Picture Mode.
   // Desktop launches remain unchanged. Big Picture now opens in main window to keep resources low.
-  const startInBigPicture = shouldStartInBigPictureMode();
+  const startUrl = pendingOpenUrl;
+  pendingOpenUrl = null;
+
+  const startInBigPicture = startUrl ? false : shouldStartInBigPictureMode();
   if (startInBigPicture) {
     console.log('[Startup] Detected game mode launch; starting in Big Picture Mode (in main window)');
     createWindow(null, true); // Pass bigPictureMode flag
   } else {
-    createWindow();
+    createWindow(startUrl || null, false);
   }
 
   // Initialize user plugins after app ready
@@ -1464,9 +1575,19 @@ ipcMain.handle('is-default-browser', () => {
 ipcMain.handle('set-as-default-browser', () => {
   try {
     const result = setAsDefaultBrowser();
-    return { success: result };
+    return result;
   } catch (err) {
     console.error('[DefaultBrowser] Error in IPC handler:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('open-default-browser-settings', () => {
+  try {
+    const result = openDefaultBrowserSettings();
+    return { success: !!result };
+  } catch (err) {
+    console.error('[DefaultBrowser] Error opening system settings:', err);
     return { success: false, error: err.message };
   }
 });

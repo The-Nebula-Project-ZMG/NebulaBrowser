@@ -517,6 +517,8 @@ contextBridge.exposeInMainWorld('api', {
   isDefaultBrowser: () => ipcRenderer.invoke('is-default-browser'),
   // Set Nebula as the default browser
   setAsDefaultBrowser: () => ipcRenderer.invoke('set-as-default-browser'),
+  // Open OS default browser settings
+  openDefaultBrowserSettings: () => ipcRenderer.invoke('open-default-browser-settings'),
   // Complete first-run setup
   completeFirstRun: (data) => ipcRenderer.invoke('complete-first-run', data),
   // Get first-run data

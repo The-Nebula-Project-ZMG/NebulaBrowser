@@ -28,6 +28,15 @@
   },
   "build": {
     "appId": "com.andrewzambazos.nebula",
+    "protocols": [
+      {
+        "name": "Nebula",
+        "schemes": [
+          "http",
+          "https"
+        ]
+      }
+    ],
     "publish": [
       {
         "provider": "github",
