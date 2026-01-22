@@ -524,6 +524,13 @@ function destroyBrowserView(win, tabId) {
 function getZoomTargetForEvent(event) {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return null;
+  const parentWin = typeof win.getParentWindow === 'function' ? win.getParentWindow() : null;
+  if (parentWin && !parentWin.isDestroyed?.()) {
+    if (parentWin.__nebulaMode === 'desktop') {
+      return getActiveDesktopViewWebContents(parentWin) || parentWin.webContents;
+    }
+    return parentWin.webContents;
+  }
   if (win.__nebulaMode === 'desktop') {
     return getActiveDesktopViewWebContents(win) || win.webContents;
   }
@@ -2153,7 +2160,6 @@ ipcMain.on('menu-popup-command', (event, payload = {}) => {
   try {
     const menuWin = BrowserWindow.fromWebContents(event.sender);
     const parentWin = menuWin?.getParentWindow();
-    if (menuWin && !menuWin.isDestroyed()) menuWin.hide();
     if (!parentWin || parentWin.isDestroyed()) return;
     if (!payload?.cmd || payload.cmd === 'close') return;
     parentWin.webContents.send('menu-command', payload);

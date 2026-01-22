@@ -35,6 +35,9 @@ window.addEventListener('click', (e) => {
   if (!btn) return;
   const cmd = btn.getAttribute('data-cmd');
   window.electronAPI?.send?.('menu-popup-command', { cmd });
+  if (cmd === 'zoom-in' || cmd === 'zoom-out') {
+    setTimeout(refreshZoom, 50);
+  }
 });
 
 window.addEventListener('keydown', (e) => {

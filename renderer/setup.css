@@ -50,9 +50,10 @@ body, html {
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
+  height: 100vh;
   min-height: 100vh;
   padding: 2rem;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 /* Progress Bar */
@@ -130,7 +131,7 @@ body, html {
   display: none;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   width: 100%;
   max-width: 900px;
   flex: 1;
@@ -159,6 +160,8 @@ body, html {
   margin-bottom: 2rem;
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.5rem;
 }
 
 .setup-title {
@@ -528,8 +531,8 @@ body, html {
   padding-bottom: 1rem;
   position: sticky;
   bottom: 0;
-  background: transparent;
-  backdrop-filter: none;
+  background: linear-gradient(180deg, rgba(18, 20, 24, 0), rgba(18, 20, 24, 0.85) 45%, rgba(18, 20, 24, 0.95));
+  backdrop-filter: blur(6px);
 }
 
 .btn {
@@ -640,5 +643,23 @@ body, html {
 
   .btn {
     width: 100%;
+  }
+}
+
+@media (max-height: 700px) {
+  .progress-bar {
+    margin-bottom: 1.25rem;
+  }
+
+  .step-content {
+    margin-bottom: 1rem;
+  }
+
+  .setup-subtitle {
+    margin-bottom: 1.25rem;
+  }
+
+  .feature-grid {
+    margin: 1rem 0;
   }
 }
