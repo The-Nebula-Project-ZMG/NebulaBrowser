@@ -1,8 +1,47 @@
+# NEBULA BROWSER
+
+*A controller-first browser originally designed for SteamOS*
+
+---
+
+### ⚠️ Final Release • Project Archived ⚠️
+
+Nebula Browser has reached end of support and is no longer under active development.
+This repository represents the final archived state of the project.
+
+---
+
 # Nebula
 
 ![Nebula Logo](assets/images/Logos/Nebula-Logo.svg)
 
-A customizable and privacy-focused web browser built with Electron. Nebula is designed to be a lightweight, secure, and user-friendly browser with a focus on performance and privacy.
+Nebula is a customizable and privacy-focused web browser built with Electron. It was designed to be a lightweight, secure, and user-friendly browser with a strong emphasis on controller-first interaction, performance, and privacy.
+
+---
+
+## Project Status
+
+**Status:** Archived
+**Maintenance:** Ended
+**Future Updates:** None planned
+
+Nebula is no longer actively maintained. The source code remains available for reference, learning, and archival purposes.
+
+---
+
+## Why Nebula Was Archived
+
+Nebula was created with a very specific goal in mind: to be a **controller-first browser that lived inside the Steam ecosystem**, particularly for Steam Deck and SteamOS users who wanted a web experience without relying on desktop mode, keyboards, or external workarounds.
+
+During the Steam review process, Valve determined that Nebula does not fit within Steam’s allowed categories for non-game software. As a result, the application was permanently retired from Steam and cannot be distributed on the platform.
+
+While Nebula can function as a desktop browser, distributing it outside of Steam fundamentally changes the experience it was designed to provide. Requiring third-party installation methods or desktop mode defeats the core problem Nebula was built to solve.
+
+Rather than ship a compromised version that no longer aligns with its original purpose, the decision was made to formally conclude development and archive the project.
+
+This repository preserves Nebula in its final state as a complete exploration of controller-first browser design.
+
+---
 
 ## Features
 
