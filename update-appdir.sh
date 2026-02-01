@@ -81,6 +81,23 @@ for file in "${FILES[@]}"; do
     fi
 done
 
+# Update main launcher scripts if present
+echo ""
+echo "🔄 Syncing launcher scripts..."
+for launcher in "Nebula-Desktop" "Nebula-Controller"; do
+    if [ -f "$SCRIPT_DIR/nebula-appdir/$launcher" ]; then
+        cp "$SCRIPT_DIR/nebula-appdir/$launcher" "$APPDIR_ROOT/$launcher"
+        chmod +x "$APPDIR_ROOT/$launcher" || true
+        echo "   ✓ $launcher"
+    fi
+done
+# Sync Nebula symlink if it exists
+if [ -L "$SCRIPT_DIR/nebula-appdir/Nebula" ]; then
+    rm -f "$APPDIR_ROOT/Nebula"
+    ln -sf "Nebula-Desktop" "$APPDIR_ROOT/Nebula"
+    echo "   ✓ Nebula (symlink)"
+fi
+
 # Sync directories
 echo ""
 echo "📁 Syncing directories..."

@@ -14,8 +14,8 @@ fi
 mkdir -p "$DEST"
 cp -a "$SRC/." "$DEST/"
 
-# Ensure launcher/binary exist
-if [ -f "$DEST/run-nebula.sh" ]; then
+# Ensure launcher/binary exist (prefer extracted run-nebula.sh as fallback)
+if [ -f "$DEST/run-nebula.sh" ] && [ ! -f "$DEST/Nebula" ]; then
   mv "$DEST/run-nebula.sh" "$DEST/Nebula" 2>/dev/null || true
 fi
 chmod +x "$DEST/Nebula" || true
@@ -76,14 +76,25 @@ if [ -f "$SCRIPT_DIR/appdir-example/nebula.desktop" ]; then
   cp "$SCRIPT_DIR/appdir-example/nebula.desktop" "$DEST/nebula.desktop"
   cp "$SCRIPT_DIR/appdir-example/nebula.desktop" "$DEST/usr/share/applications/nebula.desktop"
 fi
-# Ensure root launcher exists (from example if needed)
-if [ -f "$SCRIPT_DIR/appdir-example/Nebula" ]; then
-  cp "$SCRIPT_DIR/appdir-example/Nebula" "$DEST/Nebula"
-  chmod +x "$DEST/Nebula" || true
+# Ensure root launchers exist (from example if needed)
+if [ -f "$SCRIPT_DIR/appdir-example/Nebula-Desktop" ]; then
+  cp "$SCRIPT_DIR/appdir-example/Nebula-Desktop" "$DEST/Nebula-Desktop"
+  chmod +x "$DEST/Nebula-Desktop" || true
+fi
+if [ -f "$SCRIPT_DIR/appdir-example/Nebula-Controller" ]; then
+  cp "$SCRIPT_DIR/appdir-example/Nebula-Controller" "$DEST/Nebula-Controller"
+  chmod +x "$DEST/Nebula-Controller" || true
+fi
+# Fallback: create Nebula as symlink to Nebula-Desktop
+if [ ! -f "$DEST/Nebula" ] && [ -f "$DEST/Nebula-Desktop" ]; then
+  ln -sf "Nebula-Desktop" "$DEST/Nebula"
 fi
 
 # Fix permissions
 chmod -R a+r "$DEST/usr/share/icons/hicolor/256x256/apps" || true
-chmod +x "$DEST/Nebula" || true
+chmod +x "$DEST/Nebula" "$DEST/Nebula-Desktop" "$DEST/Nebula-Controller" || true
 
-echo "AppDir assembled at $DEST. Run with: $DEST/run-nebula.sh"
+echo "AppDir assembled at $DEST."
+echo "  Desktop mode:    $DEST/Nebula-Desktop"
+echo "  Controller mode: $DEST/Nebula-Controller"
+echo "  Default:         $DEST/Nebula (symlink to Nebula-Desktop)"
