@@ -1,13 +1,13 @@
 # NEBULA BROWSER
 
-*A controller-first browser originally designed for SteamOS*
+*A controller-first browser, now re-focused as a Linux-first project*
 
 ---
 
-### ⏸️ Development Paused • Project in Dormant State ⏸️
+### Limited Development • Project in Maintenance Mode 
 
-Nebula Browser is not under active development at this time.
-The project is currently in a dormant state, with the code preserved and available.
+Nebula Browser is no longer under active, full-time development.
+The project is maintained on an occasional basis, with updates made when time and interest allow.
 
 ---
 
@@ -15,43 +15,58 @@ The project is currently in a dormant state, with the code preserved and availab
 
 ![Nebula Logo](assets/images/Logos/Nebula-Logo.svg)
 
-Nebula is a customizable and privacy-focused web browser built with Electron. It was designed to be lightweight, secure, and user-friendly, with a strong emphasis on **controller-first interaction**, performance, and privacy, particularly for handheld PCs and living room setups.
+Nebula is a customizable and privacy-focused web browser built with Electron. It is designed to be lightweight, secure, and user-friendly, with a strong emphasis on **controller-first and keyboard-driven interaction**, performance, and privacy.
+
+While originally conceived for SteamOS and the Steam Deck, Nebula has since evolved into a **Linux-first experimental browser**, aimed at alternative input setups, handheld PCs, accessibility use cases, and living room environments.
 
 ---
 
 ## Project Status
 
-**Status:** Dormant
-**Maintenance:** No active maintenance
-**Development:** Paused
-**Future Updates:** No active roadmap
+**Status:** Maintenance Mode
+**Maintenance:** Occasional updates
+**Development:** No active roadmap
+**Focus:** Linux-first (desktop, handhelds, and alternative input setups)
 
-Nebula is not currently being worked on, but the source code remains available for use, modification, and experimentation under the MIT license.
+Nebula is not a primary or actively scheduled project. Updates may occur sporadically and are not guaranteed. The repository remains open for use, modification, and experimentation under the MIT license.
 
-This repository reflects a stable snapshot of the project as it exists today.
+This repository reflects a stable snapshot of the project, with incremental improvements added when appropriate.
 
 ---
 
-## Why Development Is Paused
+## Why the Project Changed Direction
 
-Nebula was created with a very specific goal: to be a **controller-first browser designed to live inside the Steam ecosystem**, especially for Steam Deck and SteamOS users who wanted a seamless web experience without relying on desktop mode, keyboards, or external workarounds.
+Nebula was originally created with a very specific goal: to be a **controller-first browser designed to live inside the Steam ecosystem**, especially for Steam Deck and SteamOS users who wanted a seamless web experience without relying on desktop mode, keyboards, or external workarounds.
 
 During the Steam review process, Valve determined that Nebula does not fit within Steam’s allowed categories for non-game software. As a result, the browser could not be distributed on the Steam Store.
 
-While Nebula can function as a desktop browser, distributing it outside of Steam fundamentally changes the experience it was designed to provide. Requiring third-party installation methods or desktop workflows compromises the original problem Nebula was built to solve.
+At the time, Steam distribution was considered a core pillar of the project, and development was paused as the original vision could no longer be fulfilled in its intended form.
 
-Rather than continue active development in a direction that no longer aligned with that original vision, the project was placed into a dormant state.
+Since then, community feedback has highlighted broader interest in Nebula’s **input model and interaction design**, beyond Steam or SteamOS alone. Because of this, Nebula has been re-contextualized as a Linux-first project rather than a Steam-native application.
 
 ---
 
-## What This Means
+## What This Means Now
 
-* Nebula is **not deleted or abandoned**
-* The codebase remains open and accessible
-* Community use, forks, and experimentation are welcome
-* There is currently **no commitment** to future updates
+* Nebula is **not abandoned**
+* It is **no longer a main or priority project**
+* Development happens **occasionally and without a fixed schedule**
+* The project is no longer tied to Steam or SteamOS
+* Linux desktop users, handhelds, and alternative input setups are the primary audience
 
-If the ecosystem, platform landscape, or community interest meaningfully changes in the future, the project’s status can be reassessed. Until then, Nebula stands as a complete exploration of controller-first browser design.
+Nebula exists as an ongoing experiment in controller- and keyboard-driven web navigation. It may evolve further, remain stable, or inspire forks and derivative projects.
+
+---
+
+## Distribution
+
+Nebula may be distributed outside of Steam through platforms such as:
+
+* GitHub (source and releases)
+* itch.io
+* Flatpak / Flathub
+
+Availability and packaging may change over time and are not guaranteed.
 
 ---
 
@@ -60,7 +75,6 @@ If the ecosystem, platform landscape, or community interest meaningfully changes
 Nebula Browser is licensed under the MIT License.
 You are free to use, modify, and build upon the project.
 
----
 
 
 ## Features
