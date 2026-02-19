@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run Nebula with portable data storage
-# User data (cookies, history, bookmarks) is stored in usr/data/ alongside the app.
+# User data (cookies, history, bookmarks) is stored in usr/user-data/ alongside the app.
 set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -11,7 +11,7 @@ export LD_LIBRARY_PATH="$HERE/usr/lib:$HERE/usr/lib64:$LD_LIBRARY_PATH"
 
 # --- PORTABLE DATA CONFIGURATION ---
 # Store user data in a local folder for portable operation
-PORTABLE_DATA_DIR="$HERE/usr/data"
+PORTABLE_DATA_DIR="$HERE/usr/user-data"
 export NEBULA_PORTABLE=1
 export NEBULA_PORTABLE_PATH="$PORTABLE_DATA_DIR"
 

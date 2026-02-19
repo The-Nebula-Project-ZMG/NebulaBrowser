@@ -85,8 +85,8 @@ class PortableDataManager {
 
   /**
    * Get the portable data directory path
-   * Uses NEBULA_PORTABLE_PATH if set, otherwise creates 'user-data' in Documents/My Games/<AppName>
-   * with a safe fallback to the app directory.
+    * Uses NEBULA_PORTABLE_PATH if set, otherwise creates app-local 'user-data'.
+    * Linux AppDir builds prefer 'usr/user-data' to keep writable data inside AppDir.
    */
   getPortableDataPath() {
     if (this._portableDataPath !== null) {
@@ -111,19 +111,23 @@ class PortableDataManager {
       }
     }
 
-    // Default: prefer Documents/My Games/<AppName>/user-data
-    let dataPath = '';
-    try {
-      const docsDir = app.getPath('documents');
-      const appName = app.getName() || 'NebulaBrowser';
-      dataPath = path.join(docsDir, 'My Games', appName, 'user-data');
-    } catch (err) {
-      console.warn('[Portable] Failed to resolve Documents path, using app directory');
-    }
+    // Default: app-local user data
+    // - Windows: beside the executable
+    // - macOS: inside .app Contents (portable bundle)
+    // - Linux AppDir: <AppDir>/usr/user-data
+    // - Other Linux/dev: beside the app root
+    const appRoot = this._getAppRootDir();
+    let dataPath = path.join(appRoot, 'user-data');
 
-    if (!dataPath) {
-      const appRoot = this._getAppRootDir();
-      dataPath = path.join(appRoot, 'user-data');
+    if (process.platform === 'linux') {
+      const appDirUsr = path.join(appRoot, 'usr');
+      try {
+        if (fs.existsSync(appDirUsr) && fs.statSync(appDirUsr).isDirectory()) {
+          dataPath = path.join(appDirUsr, 'user-data');
+        }
+      } catch (err) {
+        console.warn('[Portable] Could not inspect Linux AppDir usr path, using app root user-data');
+      }
     }
     
     // Validate the path

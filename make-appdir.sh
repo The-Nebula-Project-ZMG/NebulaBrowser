@@ -67,6 +67,7 @@ fi
 # Copy Linux launch wrappers if present in appdir-example
 if [ -f "$SCRIPT_DIR/appdir-example/run-nebula.sh" ]; then
   cp "$SCRIPT_DIR/appdir-example/run-nebula.sh" "$DEST/run-nebula.sh"
+  sed -i.bak 's|usr/data|usr/user-data|g' "$DEST/run-nebula.sh" && rm -f "$DEST/run-nebula.sh.bak"
   chmod +x "$DEST/run-nebula.sh" || true
 fi
 if [ -f "$SCRIPT_DIR/appdir-example/steam_appid.txt" ]; then
@@ -93,6 +94,8 @@ fi
 # Fix permissions
 chmod -R a+r "$DEST/usr/share/icons/hicolor/256x256/apps" || true
 chmod +x "$DEST/Nebula" "$DEST/Nebula-Desktop" "$DEST/Nebula-Controller" || true
+mkdir -p "$DEST/usr/user-data"
+chmod 700 "$DEST/usr/user-data" || true
 
 echo "AppDir assembled at $DEST."
 echo "  Desktop mode:    $DEST/Nebula-Desktop"

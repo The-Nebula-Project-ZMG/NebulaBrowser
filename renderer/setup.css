@@ -531,8 +531,8 @@ body, html {
   padding-bottom: 1rem;
   position: sticky;
   bottom: 0;
-  background: linear-gradient(180deg, rgba(18, 20, 24, 0), rgba(18, 20, 24, 0.85) 45%, rgba(18, 20, 24, 0.95));
-  backdrop-filter: blur(6px);
+  background: transparent;
+  backdrop-filter: none;
 }
 
 .btn {

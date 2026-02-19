@@ -84,6 +84,12 @@ done
 # Update main launcher scripts if present
 echo ""
 echo "🔄 Syncing launcher scripts..."
+if [ -f "$SCRIPT_DIR/appdir-example/run-nebula.sh" ]; then
+    cp "$SCRIPT_DIR/appdir-example/run-nebula.sh" "$APPDIR_ROOT/run-nebula.sh"
+    sed -i.bak 's|usr/data|usr/user-data|g' "$APPDIR_ROOT/run-nebula.sh" && rm -f "$APPDIR_ROOT/run-nebula.sh.bak"
+    chmod +x "$APPDIR_ROOT/run-nebula.sh" || true
+    echo "   ✓ run-nebula.sh"
+fi
 for launcher in "Nebula-Desktop" "Nebula-Controller"; do
     if [ -f "$SCRIPT_DIR/nebula-appdir/$launcher" ]; then
         cp "$SCRIPT_DIR/nebula-appdir/$launcher" "$APPDIR_ROOT/$launcher"
@@ -115,6 +121,11 @@ for dir in "${DIRS[@]}"; do
         echo "   ⚠ $dir/ (not found, skipping)"
     fi
 done
+
+# Ensure portable user-data directory exists for Linux AppDir builds
+mkdir -p "$APPDIR_ROOT/usr/user-data"
+chmod 700 "$APPDIR_ROOT/usr/user-data" || true
+echo "   ✓ usr/user-data/"
 
 echo ""
 echo "✅ AppDir updated successfully!"
