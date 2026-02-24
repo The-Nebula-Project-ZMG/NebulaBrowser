@@ -58,7 +58,10 @@
       "icon": "assets/images/Logos/Nebula-Favicon.ico"
     },
     "linux": {
-      "icon": "assets/images/Logos/Nebula-Favicon.png"
+      "icon": "assets/images/Logos/Nebula-Favicon.png",
+      "target": [
+        "AppImage"
+      ]
     }
   }
 }

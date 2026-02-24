@@ -293,7 +293,6 @@ function getDesktopViewState(win) {
 
 function createMenuPopupWindow(parentWin) {
   const menuWin = new BrowserWindow({
-    parent: parentWin,
     modal: false,
     frame: false,
     transparent: true,
@@ -301,7 +300,8 @@ function createMenuPopupWindow(parentWin) {
     show: false,
     alwaysOnTop: true,
     skipTaskbar: true,
-    focusable: true,
+    focusable: false,
+    fullscreenable: false,
     hasShadow: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -314,6 +314,7 @@ function createMenuPopupWindow(parentWin) {
 
   menuWin.setMenu(null);
   try { menuWin.setAlwaysOnTop(true, 'pop-up-menu'); } catch {}
+  try { menuWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); } catch {}
 
   const hideMenu = () => {
     if (!menuWin.isDestroyed()) menuWin.hide();
@@ -334,20 +335,45 @@ function createMenuPopupWindow(parentWin) {
 }
 
 function positionMenuPopup(parentWin, menuWin, anchorRect) {
-  if (!parentWin || !menuWin || !anchorRect) return;
-  const contentBounds = parentWin.getContentBounds();
-  const display = screen.getDisplayMatching(contentBounds);
-  const workArea = display?.workArea || contentBounds;
+  if (!parentWin || !menuWin) return;
 
   const width = MENU_POPUP_SIZE.width;
   const height = MENU_POPUP_SIZE.height;
-  let x = Math.round(contentBounds.x + anchorRect.x + anchorRect.width - width);
-  let y = Math.round(contentBounds.y + anchorRect.y + anchorRect.height + 6);
 
-  if (x < workArea.x) x = workArea.x;
-  if (y < workArea.y) y = workArea.y;
-  if (x + width > workArea.x + workArea.width) x = workArea.x + workArea.width - width;
-  if (y + height > workArea.y + workArea.height) y = workArea.y + workArea.height - height;
+  const parentBounds = parentWin.getBounds();
+  const contentBounds = parentWin.getContentBounds();
+
+  const rect = anchorRect && Number.isFinite(anchorRect.x) && Number.isFinite(anchorRect.y)
+    ? anchorRect
+    : null;
+
+  let x;
+  let y;
+
+  if (rect) {
+    x = Math.round(contentBounds.x + rect.x + rect.width - width);
+    y = Math.round(contentBounds.y + rect.y + rect.height + 6);
+  } else {
+    x = Math.round(parentBounds.x + parentBounds.width - width - 12);
+    y = Math.round(parentBounds.y + 52);
+  }
+
+  const display = screen.getDisplayNearestPoint({ x, y });
+  const workArea = display?.workArea || { x: 0, y: 0, width: 1920, height: 1080 };
+
+  if (x < workArea.x) x = workArea.x + 6;
+  if (x + width > workArea.x + workArea.width) x = workArea.x + workArea.width - width - 6;
+  if (y < workArea.y) y = workArea.y + 6;
+  if (y + height > workArea.y + workArea.height) {
+    const aboveY = rect
+      ? Math.round(contentBounds.y + rect.y - height - 6)
+      : Math.round(parentBounds.y + parentBounds.height - height - 12);
+    if (aboveY >= workArea.y) {
+      y = aboveY;
+    } else {
+      y = workArea.y + workArea.height - height - 6;
+    }
+  }
 
   menuWin.setBounds({ x, y, width, height }, false);
 }
@@ -2117,7 +2143,35 @@ ipcMain.handle('browserview-set-bounds', (event, bounds) => {
   }
 });
 
-// Overlay menu (to sit above BrowserView)
+// Native popup menu for the burger button — renders above BrowserView on all platforms
+ipcMain.handle('show-app-menu', (event, payload = {}) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return;
+    const zoomFactor = win.webContents.getZoomFactor?.() || 1;
+    const zoomLabel = `${Math.round(zoomFactor * 100)}%`;
+    const template = [
+      { label: 'Settings', click: () => win.webContents.send('menu-command', { cmd: 'open-settings' }) },
+      { type: 'separator' },
+      { label: '\u{1F3AE} Big Picture Mode', click: () => win.webContents.send('menu-command', { cmd: 'big-picture' }) },
+      { type: 'separator' },
+      { label: 'Toggle Developer Tools', click: () => win.webContents.send('menu-command', { cmd: 'toggle-devtools' }) },
+      { type: 'separator' },
+      { label: `Zoom: ${zoomLabel}`, enabled: false },
+      { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', click: () => win.webContents.send('menu-command', { cmd: 'zoom-in' }) },
+      { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => win.webContents.send('menu-command', { cmd: 'zoom-out' }) },
+      { type: 'separator' },
+      { label: 'Hard Reload (Ignore Cache)', click: () => win.webContents.send('menu-command', { cmd: 'hard-reload' }) },
+      { label: 'Reload Fresh (Add Cache-Buster)', click: () => win.webContents.send('menu-command', { cmd: 'fresh-reload' }) },
+    ];
+    const menu = Menu.buildFromTemplate(template);
+    menu.popup({ window: win, x: payload.x, y: payload.y });
+  } catch (err) {
+    console.error('[show-app-menu] Error:', err);
+  }
+});
+
+// Overlay menu (to sit above BrowserView) — kept for backwards compat but no longer primary
 ipcMain.on('menu-popup-toggle', (event, payload = {}) => {
   try {
     const parentWin = BrowserWindow.fromWebContents(event.sender);
@@ -2134,7 +2188,24 @@ ipcMain.on('menu-popup-toggle', (event, payload = {}) => {
       return;
     }
 
-    positionMenuPopup(parentWin, menuWin, payload.anchorRect);
+    const anchorRect = payload?.anchorRect;
+    const anchorScreenPoint = payload?.anchorScreenPoint;
+
+    if (anchorScreenPoint && Number.isFinite(anchorScreenPoint.x) && Number.isFinite(anchorScreenPoint.y)) {
+      const width = MENU_POPUP_SIZE.width;
+      const height = MENU_POPUP_SIZE.height;
+      let x = Math.round(anchorScreenPoint.x - width);
+      let y = Math.round(anchorScreenPoint.y + 6);
+      const display = screen.getDisplayNearestPoint({ x, y });
+      const workArea = display?.workArea || { x: 0, y: 0, width: 1920, height: 1080 };
+      if (x < workArea.x) x = workArea.x + 6;
+      if (x + width > workArea.x + workArea.width) x = workArea.x + workArea.width - width - 6;
+      if (y < workArea.y) y = workArea.y + 6;
+      if (y + height > workArea.y + workArea.height) y = workArea.y + workArea.height - height - 6;
+      menuWin.setBounds({ x, y, width, height }, false);
+    } else {
+      positionMenuPopup(parentWin, menuWin, anchorRect);
+    }
 
     const initPayload = { theme: payload.theme || null };
     const sendInit = () => {
@@ -2148,8 +2219,15 @@ ipcMain.on('menu-popup-toggle', (event, payload = {}) => {
       }
     } catch {}
 
-    menuWin.show();
-    menuWin.focus();
+    try {
+      if (typeof menuWin.showInactive === 'function') {
+        menuWin.showInactive();
+      } else {
+        menuWin.show();
+      }
+    } catch {
+      menuWin.show();
+    }
   } catch {}
 });
 

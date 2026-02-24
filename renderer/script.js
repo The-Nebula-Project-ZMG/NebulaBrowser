@@ -477,8 +477,7 @@ ipcRenderer.on('browserview-host-message', (payload) => {
 });
 
 // Commands from the overlay menu window
-ipcRenderer.on('menu-command', (payload) => {
-  const cmd = payload?.cmd;
+function runMenuCommand(cmd) {
   if (!cmd) return;
   switch (cmd) {
     case 'open-settings':
@@ -508,6 +507,45 @@ ipcRenderer.on('menu-command', (payload) => {
     default:
       break;
   }
+}
+
+const isLinux = document.body.classList.contains('platform-linux');
+
+function hideMainMenuPopup() {
+  if (!isLinux) {
+    // Windows/macOS: hide the popup window
+    ipcRenderer.send('menu-popup-hide');
+  }
+}
+
+function showNativeAppMenu() {
+  if (!menuBtn) return;
+  const rect = menuBtn.getBoundingClientRect();
+
+  if (isLinux) {
+    // Linux: use native OS menu (renders above BrowserView reliably)
+    ipcRenderer.invoke('show-app-menu', {
+      x: Math.round(rect.right - 200),
+      y: Math.round(rect.bottom + 4)
+    }).catch(() => {});
+  } else {
+    // Windows/macOS: use the custom popup window
+    const theme = currentThemeColors ? { colors: currentThemeColors } : null;
+    ipcRenderer.send('menu-popup-toggle', {
+      anchorRect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+      anchorScreenPoint: {
+        x: Math.round(window.screenX + rect.right),
+        y: Math.round(window.screenY + rect.bottom)
+      },
+      theme
+    });
+  }
+}
+
+ipcRenderer.on('menu-command', (payload) => {
+  const cmd = payload?.cmd;
+  runMenuCommand(cmd);
+  hideMainMenuPopup();
 });
 
 // Auto-open on download start is disabled by design now.
@@ -1145,18 +1183,12 @@ let ringSvgEl = null;
 // Open/close on button click; stop propagation so outside-click handler doesn't immediately close it
 menuBtn.addEventListener('click', (e) => {
   e.stopPropagation();
-  if (!menuBtn) return;
-  const rect = menuBtn.getBoundingClientRect();
-  const theme = currentThemeColors ? { colors: currentThemeColors } : null;
-  ipcRenderer.send('menu-popup-toggle', {
-    anchorRect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
-    theme
-  });
+  showNativeAppMenu();
 });
 
 // Close on Escape key
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') ipcRenderer.send('menu-popup-hide');
+  if (e.key === 'Escape') hideMainMenuPopup();
   if (e.key === 'Escape' && downloadsPopupEl && !downloadsPopupEl.classList.contains('hidden')) {
     hideDownloadsPopup();
   }
@@ -1167,7 +1199,7 @@ ipcRenderer.on('browserview-event', (payload) => {
   if (!payload || !payload.type) return;
   const { tabId, type } = payload;
   if (type === 'focus') {
-    ipcRenderer.send('menu-popup-hide');
+    hideMainMenuPopup();
     if (downloadsPopupEl && !downloadsPopupEl.classList.contains('hidden')) hideDownloadsPopup();
     return;
   }
@@ -1276,13 +1308,32 @@ window.addEventListener('DOMContentLoaded', () => {
     bigPictureBtn.addEventListener('click', async () => {
       try {
         await window.bigPictureAPI.launch();
-        // Close the overlay menu
-        ipcRenderer.send('menu-popup-hide');
+        hideMainMenuPopup();
       } catch (e) {
         console.error('Failed to launch Big Picture Mode:', e);
       }
     });
   }
+
+  if (menuPopup) {
+    menuPopup.addEventListener('click', (e) => {
+      const button = e.target instanceof HTMLElement ? e.target.closest('button') : null;
+      if (!button) return;
+      const id = button.id;
+      if (!id) return;
+      if (id !== 'zoom-in-btn' && id !== 'zoom-out-btn') {
+        hideMainMenuPopup();
+      }
+      e.stopPropagation();
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!menuPopup || menuPopup.classList.contains('hidden')) return;
+    if (menuWrapper && !menuWrapper.contains(e.target)) {
+      hideMainMenuPopup();
+    }
+  });
 
   // Cache back/forward buttons for faster updates (no need to add listeners - already in HTML)
   backBtnCached = document.querySelector('.nav-left button:nth-child(1)');
@@ -1462,7 +1513,7 @@ try {
 function attachCloseMenuOnInteract(el) {
   if (!el) return;
   const closeIfOpen = () => {
-    ipcRenderer.send('menu-popup-hide');
+    hideMainMenuPopup();
     if (downloadsPopupEl && !downloadsPopupEl.classList.contains('hidden')) {
       hideDownloadsPopup();
     }
