@@ -1115,6 +1115,13 @@ function createWindow(startUrl, bigPictureMode = false) {
       frame: false,
       backgroundColor: '#0b0d10',
     });
+  } else if (process.platform === 'linux') {
+    // On Linux, use a frameless window so only the in-app controls are shown.
+    Object.assign(windowOptions, {
+      frame: false,
+      backgroundColor: '#0b0d10',
+      skipTaskbar: true
+    });
   } else {
     windowOptions.frame = true;
   }
