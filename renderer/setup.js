@@ -121,6 +121,22 @@ function getThemeById(themeId) {
   return null;
 }
 
+function hexToRgb(hex) {
+  if (!hex || typeof hex !== 'string') return null;
+  let normalized = hex.trim().replace(/^#/, '');
+  if (normalized.length === 3) {
+    normalized = normalized.split('').map(char => char + char).join('');
+  }
+  if (!/^[a-fA-F\d]{6}$/.test(normalized)) return null;
+
+  const intValue = parseInt(normalized, 16);
+  return {
+    r: (intValue >> 16) & 255,
+    g: (intValue >> 8) & 255,
+    b: intValue & 255
+  };
+}
+
 /**
  * Apply theme to the setup page UI and persist selection
  */
@@ -140,6 +156,25 @@ function applyThemeToSetupPage(theme, themeId = null) {
   setVar('--primary', colors.primary, '#7B2EFF');
   setVar('--accent', colors.accent, '#00C6FF');
   setVar('--text', colors.text, '#E0E0E0');
+  setVar('--success', colors.accent, '#4CAF50');
+  setVar('--warning', colors.primary, '#FF9800');
+
+  const primaryRgb = hexToRgb(colors.primary || '#7B2EFF');
+  const accentRgb = hexToRgb(colors.accent || '#00C6FF');
+  const successRgb = hexToRgb(colors.accent || '#4CAF50');
+  const warningRgb = hexToRgb(colors.primary || '#FF9800');
+  if (primaryRgb) {
+    setVar('--primary-rgb', `${primaryRgb.r}, ${primaryRgb.g}, ${primaryRgb.b}`);
+  }
+  if (accentRgb) {
+    setVar('--accent-rgb', `${accentRgb.r}, ${accentRgb.g}, ${accentRgb.b}`);
+  }
+  if (successRgb) {
+    setVar('--success-rgb', `${successRgb.r}, ${successRgb.g}, ${successRgb.b}`);
+  }
+  if (warningRgb) {
+    setVar('--warning-rgb', `${warningRgb.r}, ${warningRgb.g}, ${warningRgb.b}`);
+  }
 
   if (theme.gradient) {
     document.body.style.background = theme.gradient;
