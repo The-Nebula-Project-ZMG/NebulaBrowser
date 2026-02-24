@@ -1,5 +1,9 @@
 # Linux / SteamOS Build Upload Guide (SteamCMD)
 
+> Note: Nebula will not be distributed on the Steam Store. This Steam upload
+> guide is retained for historical/reference purposes only. Official releases
+> will be published on itch.io and other non-Steam channels.
+
 This guide explains how to upload the **Linux / SteamOS** build of Nebula Browser to Steam using **SteamCMD**. It is tailored to the current project layout on Steam Deck / Linux.
 
 ---

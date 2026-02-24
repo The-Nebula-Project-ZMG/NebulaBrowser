@@ -416,13 +416,6 @@ function renderCompletionSummary() {
         <div class="summary-value">${setupState.defaultBrowserSet ? 'Set as Default' : 'Not Set'}</div>
       </div>
     </div>
-    <div class="summary-item">
-      <div class="summary-icon">☁️</div>
-      <div class="summary-content">
-        <div class="summary-label">Steam Cloud Sync</div>
-        <div class="summary-value">Coming in Phase 2</div>
-      </div>
-    </div>
   `;
 }
 

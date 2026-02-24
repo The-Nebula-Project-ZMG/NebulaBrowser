@@ -612,7 +612,6 @@ async function completeFirstRun(preferences = {}) {
     selectedThemeId: preferences.selectedTheme || 'default',
     defaultBrowserAttempted: preferences.defaultBrowserSet || false,
     defaultBrowserSet: preferences.defaultBrowserSet || false,
-    steamCloudOptIn: preferences.steamCloudOptIn || false,
     completedAt: new Date().toISOString()
   };
   
