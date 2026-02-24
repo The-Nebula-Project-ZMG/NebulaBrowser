@@ -68,6 +68,9 @@ Nebula may be distributed outside of Steam through platforms such as:
 
 Availability and packaging may change over time and are not guaranteed.
 
+Official releases for Nebula will be published on itch.io; Steam distribution
+is not available due to the Steam review outcome described above.
+
 ---
 
 ## Licensing

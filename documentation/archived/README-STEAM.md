@@ -1,5 +1,10 @@
 Converting extracted AppImage (`squashfs-root`) into a distributable AppDir for Steam
 
+> Note: Nebula will not be distributed on the Steam Store. This document is
+> kept for reference and for users who run Nebula via Steam as a non-Steam
+> shortcut. Official distribution will be handled via itch.io and other
+> non-Steam channels.
+
 If your environment lacks `rsync`, use `cp -a` to copy the extracted AppImage into a clean AppDir and prepare it for upload to Steam.
 
 1) Copy the extracted AppImage to an AppDir folder
@@ -77,7 +82,7 @@ Nebula solves this by:
 
 ### Gamepad API (for Developers)
 
-The gamepad handler exposes an API via `window.gamepadAPI`:
+The gamepad handler exposes an API via `window.gamepadAPI`.
 
 ```javascript
 // Check if gamepad handler is initialized
@@ -142,7 +147,6 @@ If Steam is still applying mouse emulation:
    - **Steam Deck / SteamOS Gaming Mode**:
      - Open Nebula → press the Steam button → **Controller Settings** (or the controller icon)
      - Set the layout to a **Gamepad** template (not “Keyboard/Mouse”), or disable Steam Input if the toggle is available
-   - This stops Steam from translating controller input into keyboard/mouse events (“Desktop Layout” behavior).
 
    If you **don’t see a Controller tab** (common when the Steam entry is treated as an “application/tool”):
    - Use **Big Picture / Gaming Mode** and edit the **Controller Layout** for that specific entry.
@@ -160,7 +164,7 @@ If Steam is still applying mouse emulation:
 
 The `VAR=value %command%` syntax does **not** work on Windows. Use the Steam UI instead:
 
-1. **Library** → right-click Nebula → **Properties** → **Controller** → set to **"Disable Steam Input"**
+1. **Library** → right-click Nebula → **Properties** → **Controller** → set to **"Disable Steam Input"** 
 2. If no Controller tab exists, open Steam in **Big Picture Mode** → Nebula → **Manage Game** (gear) → **Controller Options** → **Disable Steam Input**
 
 If you must use launch options on Windows, use this wrapper syntax:
